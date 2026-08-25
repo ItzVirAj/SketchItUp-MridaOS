@@ -21,7 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../../types';
-import { authApi } from '../../lib/api';
+import { authApi, adminUsersApi } from '../../lib/api';
 
 export const UsersDirectoryView: React.FC = () => {
   const {
@@ -109,6 +109,23 @@ export const UsersDirectoryView: React.FC = () => {
       }
     } catch (err: any) {
       alert(`Failed to generate reset token: ${err.message}`);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleUnlockUser = async (user: UserProfile) => {
+    setActionLoadingId(user.id);
+    try {
+      const res = await adminUsersApi.unlock(user.id);
+      if (res.data) {
+        alert(`Account for ${user.fullName} unlocked successfully. Failed attempt counters reset.`);
+        fetchUsersList();
+      } else {
+        alert(`Failed to unlock account: ${res.error?.message || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      alert(`Unlock failed: ${err.message}`);
     } finally {
       setActionLoadingId(null);
     }
@@ -291,6 +308,16 @@ export const UsersDirectoryView: React.FC = () => {
                     {/* Actions */}
                     <td className="py-3 px-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Unlock Account / Clear Lockout */}
+                        <button
+                          onClick={() => handleUnlockUser(u)}
+                          disabled={actionLoadingId === u.id}
+                          className="p-1.5 rounded-xl border border-[#DCE4DF] bg-white hover:bg-[#F2F7F4] text-[#175CD3] transition-colors cursor-pointer"
+                          title="Unlock Account (Reset Failed Attempt Counters)"
+                        >
+                          <Unlock className="w-3.5 h-3.5" />
+                        </button>
+
                         {/* Generate 15-Minute Reset Token */}
                         <button
                           onClick={() => handleGenerateResetToken(u)}

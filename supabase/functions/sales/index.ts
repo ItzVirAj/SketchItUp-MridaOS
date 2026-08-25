@@ -4,10 +4,14 @@ import { successResponse, errorResponse } from '../_shared/response.ts';
 import { authenticateUser } from '../_shared/auth.ts';
 import { validateSchema, CreateSaleSchema, zSearchQuery } from '../_shared/validation.ts';
 import { requireRole, requireBranchMatch } from '../_shared/rbac.ts';
+import { enforceApiRateLimit, enforceGlobalIpRateLimit } from '../_shared/apiRateLimit.ts';
 
 serve(async (req: Request) => {
   const cors = handleCors(req);
   if (cors) return cors;
+
+  const globalIpLimit = await enforceGlobalIpRateLimit(req);
+  if (globalIpLimit) return globalIpLimit;
 
   const url = new URL(req.url);
   const path = url.pathname;
@@ -16,6 +20,10 @@ serve(async (req: Request) => {
   const { user, error: authError, client } = await authenticateUser(req);
   if (authError) return authError;
   if (!user) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+
+  const operation = method === 'GET' || method === 'HEAD' ? 'read' : method === 'DELETE' ? 'delete' : 'write';
+  const apiLimit = await enforceApiRateLimit(req, user.id, operation);
+  if (apiLimit) return apiLimit;
 
   try {
     const parts = path.split('/').filter(Boolean);

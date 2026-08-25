@@ -285,6 +285,8 @@ export const adminUsersApi = {
     apiFetch<{ message: string; profile: UserProfile }>(`admin-users/${id}/revoke`, { method: 'PATCH' }),
   unrevoke: (id: string) =>
     apiFetch<{ message: string; profile: UserProfile }>(`admin-users/${id}/unrevoke`, { method: 'PATCH' }),
+  unlock: (id: string) =>
+    apiFetch<{ message: string; userId: string }>(`admin-users/${id}/unlock`, { method: 'PATCH' }),
   delete: (id: string) =>
     apiFetch<{ message: string; userId: string }>(`admin-users/${id}`, { method: 'DELETE' }),
 };

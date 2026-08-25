@@ -4,6 +4,8 @@ import { successResponse, errorResponse } from '../_shared/response.ts';
 import { authenticateUser } from '../_shared/auth.ts';
 import { validateSchema, CreateUserSchema } from '../_shared/validation.ts';
 import { requireRole } from '../_shared/rbac.ts';
+import { unlockAccount } from '../_shared/accountLockout.ts';
+import { logSecurityEvent } from '../_shared/securityLogger.ts';
 
 serve(async (req: Request) => {
   const cors = handleCors(req);
@@ -12,6 +14,11 @@ serve(async (req: Request) => {
   const url = new URL(req.url);
   const path = url.pathname;
   const method = req.method;
+
+  const clientIp =
+    req.headers.get('cf-connecting-ip') ||
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    '127.0.0.1';
 
   const { user, error: authError, client } = await authenticateUser(req);
   if (authError) return authError;
@@ -30,7 +37,10 @@ serve(async (req: Request) => {
     // 1. GET /admin-users (List all employees)
     // ------------------------------------------------------------------------
     if (method === 'GET') {
-      const { data, error } = await client.from('profiles').select('*').order('created_at', { ascending: false });
+      const { data, error } = await client
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
       if (error) {
         return errorResponse('DATABASE_ERROR', error.message, 500);
       }
@@ -71,7 +81,30 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 3. PATCH /admin-users/:id/revoke (Revoke Access)
+    // 3. PATCH /admin-users/:id/unlock (Unlock Locked Account)
+    // ------------------------------------------------------------------------
+    if (method === 'PATCH' && path.includes('/unlock')) {
+      const targetUserId = parts[parts.indexOf('admin-users') + 1] || lastPart;
+
+      await unlockAccount(client, targetUserId);
+
+      await logSecurityEvent(client, {
+        event_type: 'account_unlocked',
+        user_id: targetUserId,
+        performed_by: user.id,
+        ip_address: clientIp,
+        severity: 'info',
+        metadata: { unlocked_by_admin: true, admin_email: user.email },
+      });
+
+      return successResponse({
+        message: 'Account unlocked successfully',
+        userId: targetUserId,
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // 4. PATCH /admin-users/:id/revoke (Revoke Access)
     // ------------------------------------------------------------------------
     if (method === 'PATCH' && path.includes('/revoke')) {
       const targetUserId = parts[parts.indexOf('admin-users') + 1] || lastPart;
@@ -91,7 +124,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 4. PATCH /admin-users/:id/unrevoke (Restore Access)
+    // 5. PATCH /admin-users/:id/unrevoke (Restore Access)
     // ------------------------------------------------------------------------
     if (method === 'PATCH' && path.includes('/unrevoke')) {
       const targetUserId = parts[parts.indexOf('admin-users') + 1] || lastPart;
@@ -111,7 +144,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 5. DELETE /admin-users/:id (Delete User)
+    // 6. DELETE /admin-users/:id (Delete User)
     // ------------------------------------------------------------------------
     if (method === 'DELETE' && isSingle) {
       const targetUserId = lastPart;

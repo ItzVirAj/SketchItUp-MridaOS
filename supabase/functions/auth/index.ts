@@ -10,6 +10,19 @@ import {
   ChangePasswordSchema,
 } from '../_shared/validation.ts';
 import { requireRole } from '../_shared/rbac.ts';
+import {
+  checkRateLimit,
+  resetRateLimit,
+  RATE_LIMITS,
+  createRateLimitResponse,
+  addRateLimitHeaders,
+} from '../_shared/rateLimit.ts';
+import {
+  checkAccountLockout,
+  recordFailedLogin,
+  resetLockout,
+} from '../_shared/accountLockout.ts';
+import { logSecurityEvent } from '../_shared/securityLogger.ts';
 
 // Device session registry
 interface DeviceSession {
@@ -33,12 +46,6 @@ interface PasswordResetToken {
   expiresAt: number; // timestamp in ms (15 minutes from issue)
   usedAt: number | null;
   createdAt: number;
-}
-
-// Rate limiting tracker for reset requests (3 requests/hour per email)
-interface RateLimitRecord {
-  count: number;
-  resetTime: number;
 }
 
 const SEED_ACCOUNTS = [
@@ -93,7 +100,6 @@ const SEED_ACCOUNTS = [
 const activeSessions = new Map<string, DeviceSession>();
 const userPasswords = new Map<string, string>(); // email -> password
 const passwordResetTokens = new Map<string, PasswordResetToken>(); // tokenHash -> Record
-const resetRateLimits = new Map<string, RateLimitRecord>(); // email -> rate limit
 
 // Initialize passwords
 SEED_ACCOUNTS.forEach((acc) => {
@@ -132,14 +138,14 @@ serve(async (req: Request) => {
   const method = req.method;
 
   const clientIp =
-    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
     req.headers.get('cf-connecting-ip') ||
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
     '127.0.0.1';
   const userAgent = req.headers.get('user-agent') || 'Unknown Browser';
 
   try {
     // ------------------------------------------------------------------------
-    // 1. POST /auth/login (15-min JWT + Device Session)
+    // 1. POST /auth/login (Rate Limiting + Brute-Force Account Lockout + 15m JWT)
     // ------------------------------------------------------------------------
     if (method === 'POST' && (path.endsWith('/login') || path === '/auth' || path === '/auth/')) {
       const rawBody = await req.json();
@@ -150,16 +156,167 @@ serve(async (req: Request) => {
         return errorResponse('VALIDATION_ERROR', 'Email and password are required', 400);
       }
 
+      // Step 1: Rate Limit Check #1 (IP-based: 5 attempts/min)
+      const ipRateLimit = await checkRateLimit(`login_ip:${clientIp}`, RATE_LIMITS.login_ip);
+      if (!ipRateLimit.allowed) {
+        await logSecurityEvent({} as any, {
+          event_type: 'rate_limit_exceeded',
+          email,
+          ip_address: clientIp,
+          severity: 'warning',
+          metadata: { limit_type: 'ip', current_count: ipRateLimit.current },
+        });
+        const resp = createRateLimitResponse(ipRateLimit);
+        addRateLimitHeaders(resp.headers, ipRateLimit, RATE_LIMITS.login_ip);
+        return resp;
+      }
+
+      // Step 2: Rate Limit Check #2 (Email-based: 10 attempts/15 min)
+      const emailRateLimit = await checkRateLimit(`login_email:${email}`, RATE_LIMITS.login_email);
+      if (!emailRateLimit.allowed) {
+        await logSecurityEvent({} as any, {
+          event_type: 'rate_limit_exceeded',
+          email,
+          ip_address: clientIp,
+          severity: 'warning',
+          metadata: { limit_type: 'email', current_count: emailRateLimit.current },
+        });
+        const resp = createRateLimitResponse(emailRateLimit);
+        addRateLimitHeaders(resp.headers, emailRateLimit, RATE_LIMITS.login_email);
+        return resp;
+      }
+
+      // Step 3: Account Lockout Check (5 failed attempts threshold)
+      const lockoutStatus = await checkAccountLockout({} as any, email);
+      if (lockoutStatus.isLocked) {
+        const retryAfter = Math.max(
+          1,
+          Math.ceil((lockoutStatus.lockedUntil!.getTime() - Date.now()) / 1000)
+        );
+
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 'ACCOUNT_LOCKED',
+              message: `Account temporarily locked due to multiple failed login attempts. Please try again in ${Math.ceil(
+                retryAfter / 60
+              )} minute(s) or contact your administrator.`,
+              locked_until: lockoutStatus.lockedUntil!.toISOString(),
+              retry_after: retryAfter,
+            },
+            data: null,
+          }),
+          {
+            status: 423, // 423 Locked
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': retryAfter.toString(),
+            },
+          }
+        );
+      }
+
+      // Step 4: Verify Account & Password
       const user = SEED_ACCOUNTS.find((a) => a.email.toLowerCase() === email);
-      if (!user) {
-        return errorResponse('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+      const currentStoredPassword = userPasswords.get(email) || user?.password;
+      const isPasswordValid =
+        user &&
+        (password === currentStoredPassword ||
+          password === 'Admin@1234' ||
+          password === 'MridaOS@2026');
+
+      if (!user || !isPasswordValid) {
+        // Record failed attempt
+        const newLockoutStatus = await recordFailedLogin({} as any, email);
+
+        if (newLockoutStatus.isLocked) {
+          await logSecurityEvent({} as any, {
+            event_type: 'account_locked',
+            user_id: user?.id,
+            email,
+            ip_address: clientIp,
+            severity: 'critical',
+            metadata: {
+              locked_until: newLockoutStatus.lockedUntil?.toISOString(),
+              failed_attempts: newLockoutStatus.failedAttempts,
+            },
+          });
+
+          const retryAfter = Math.max(
+            1,
+            Math.ceil((newLockoutStatus.lockedUntil!.getTime() - Date.now()) / 1000)
+          );
+
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: 'ACCOUNT_LOCKED',
+                message: `Account locked after 5 failed attempts. Please try again in ${Math.ceil(
+                  retryAfter / 60
+                )} minutes.`,
+                locked_until: newLockoutStatus.lockedUntil!.toISOString(),
+                retry_after: retryAfter,
+              },
+              data: null,
+            }),
+            {
+              status: 423,
+              headers: {
+                'Content-Type': 'application/json',
+                'Retry-After': retryAfter.toString(),
+              },
+            }
+          );
+        }
+
+        await logSecurityEvent({} as any, {
+          event_type: 'login_failed',
+          email,
+          ip_address: clientIp,
+          user_agent: userAgent,
+          severity: 'warning',
+          metadata: {
+            reason: 'invalid_password',
+            remaining_attempts: newLockoutStatus.remainingAttempts,
+          },
+        });
+
+        let errorMsg = 'Invalid email or password';
+        if (newLockoutStatus.remainingAttempts > 0 && newLockoutStatus.remainingAttempts <= 2) {
+          errorMsg += `. ${newLockoutStatus.remainingAttempts} attempt(s) remaining before account lockout.`;
+        }
+
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 'INVALID_CREDENTIALS',
+              message: errorMsg,
+              remaining_attempts: newLockoutStatus.remainingAttempts,
+            },
+            data: null,
+          }),
+          {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
       }
 
-      const currentStoredPassword = userPasswords.get(email) || user.password;
-      if (password !== currentStoredPassword && password !== 'Admin@1234' && password !== 'MridaOS@2026') {
-        return errorResponse('INVALID_CREDENTIALS', 'Invalid email or password', 401);
-      }
+      // Step 5: SUCCESS — Reset Lockout Counters & Rate Limits
+      await resetLockout({} as any, user.id);
+      await resetRateLimit(`login_email:${email}`);
 
+      await logSecurityEvent({} as any, {
+        event_type: 'login_success',
+        user_id: user.id,
+        email: user.email,
+        ip_address: clientIp,
+        user_agent: userAgent,
+        severity: 'info',
+        metadata: { role: user.role, branch_id: user.branchId },
+      });
+
+      // Step 6: Create 15-Minute Session
       const sessionId = crypto.randomUUID();
       const now = new Date();
       const expiresAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
@@ -199,24 +356,36 @@ serve(async (req: Request) => {
         branchId: user.branchId,
       });
 
-      return successResponse({
-        token,
-        tokenType: 'Bearer',
-        expiresIn: 900,
-        expiresAt: new Date(exp * 1000).toISOString(),
-        sessionId,
-        user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role,
-          phone: user.phone,
-          branchId: user.branchId,
-          lastLoginAt: now.toISOString(),
-          lastLoginIp: clientIp,
-        },
-        session: deviceSession,
-      });
+      const responseHeaders = new Headers({ 'Content-Type': 'application/json' });
+      addRateLimitHeaders(responseHeaders, ipRateLimit, RATE_LIMITS.login_ip);
+
+      return new Response(
+        JSON.stringify({
+          data: {
+            token,
+            tokenType: 'Bearer',
+            expiresIn: 900,
+            expiresAt: new Date(exp * 1000).toISOString(),
+            sessionId,
+            user: {
+              id: user.id,
+              email: user.email,
+              fullName: user.fullName,
+              role: user.role,
+              phone: user.phone,
+              branchId: user.branchId,
+              lastLoginAt: now.toISOString(),
+              lastLoginIp: clientIp,
+            },
+            session: deviceSession,
+          },
+          error: null,
+        }),
+        {
+          status: 200,
+          headers: responseHeaders,
+        }
+      );
     }
 
     // ------------------------------------------------------------------------
@@ -228,32 +397,21 @@ serve(async (req: Request) => {
       if (validation.error) return validation.error;
 
       const { email } = validation.data;
-      const user = SEED_ACCOUNTS.find((a) => a.email.toLowerCase() === email);
 
-      // Check rate limit: 3 requests per hour
-      const now = Date.now();
-      const rateKey = email;
-      const existingLimit = resetRateLimits.get(rateKey);
+      // Rate limit check: 3 requests/hr per email
+      const resetRateLimitResult = await checkRateLimit(
+        `password_reset:${email}`,
+        RATE_LIMITS.password_reset_request
+      );
 
-      if (existingLimit) {
-        if (now < existingLimit.resetTime) {
-          if (existingLimit.count >= 3) {
-            const minutesLeft = Math.ceil((existingLimit.resetTime - now) / 60000);
-            return errorResponse(
-              'RATE_LIMIT_EXCEEDED',
-              `Password reset rate limit reached (3 requests/hour). Please try again in ${minutesLeft} minute(s).`,
-              429
-            );
-          }
-          existingLimit.count++;
-        } else {
-          resetRateLimits.set(rateKey, { count: 1, resetTime: now + 3600000 });
-        }
-      } else {
-        resetRateLimits.set(rateKey, { count: 1, resetTime: now + 3600000 });
+      if (!resetRateLimitResult.allowed) {
+        const resp = createRateLimitResponse(resetRateLimitResult);
+        addRateLimitHeaders(resp.headers, resetRateLimitResult, RATE_LIMITS.password_reset_request);
+        return resp;
       }
 
-      // Generate 32-byte token & store hash
+      const user = SEED_ACCOUNTS.find((a) => a.email.toLowerCase() === email);
+      const now = Date.now();
       const plainToken = generateSecureToken();
       const tokenHash = await hashToken(plainToken);
       const expiresAt = now + 15 * 60 * 1000; // 15 minutes
@@ -267,13 +425,21 @@ serve(async (req: Request) => {
           usedAt: null,
           createdAt: now,
         });
+
+        await logSecurityEvent({} as any, {
+          event_type: 'password_reset_requested',
+          user_id: user.id,
+          email: user.email,
+          ip_address: clientIp,
+          severity: 'info',
+        });
       }
 
       const resetLink = `http://localhost:3000/reset-password?token=${plainToken}`;
 
       return successResponse({
         message: 'If the email exists in our system, a password reset link has been dispatched.',
-        resetLink, // Included for local testability & immediate user access
+        resetLink,
         expiresInSeconds: 900,
       });
     }
@@ -310,7 +476,10 @@ serve(async (req: Request) => {
       // 2. Update user's password
       userPasswords.set(resetRecord.email.toLowerCase(), new_password);
 
-      // 3. Revoke ALL active user sessions (force re-login everywhere)
+      // 3. Unlock account if it was locked
+      await resetLockout({} as any, resetRecord.userId);
+
+      // 4. Revoke ALL active user sessions
       let revokedCount = 0;
       for (const session of activeSessions.values()) {
         if (session.userId === resetRecord.userId) {
@@ -319,6 +488,15 @@ serve(async (req: Request) => {
         }
       }
 
+      await logSecurityEvent({} as any, {
+        event_type: 'password_reset_completed',
+        user_id: resetRecord.userId,
+        email: resetRecord.email,
+        ip_address: clientIp,
+        severity: 'info',
+        metadata: { revoked_sessions: revokedCount },
+      });
+
       return successResponse({
         message: 'Password reset successful. All active device sessions have been revoked. Please log in with your new password.',
         revokedSessionsCount: revokedCount,
@@ -326,7 +504,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 4. POST /auth/admin-generate-reset-token (Admin on-demand single-use token)
+    // 4. POST /auth/admin-generate-reset-token
     // ------------------------------------------------------------------------
     if (method === 'POST' && path.includes('/admin-generate-reset-token')) {
       const { user: callerUser, error: callerAuthErr } = await authenticateUser(req);
@@ -410,7 +588,7 @@ serve(async (req: Request) => {
       });
     }
 
-    // Authenticate user for all protected endpoints below
+    // Protected endpoints
     const { user, error: authError } = await authenticateUser(req);
     if (authError) return authError;
     if (!user) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
@@ -427,7 +605,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 7. GET /auth/devices (List Active Logged-in Devices & Last Logins)
+    // 7. GET /auth/devices
     // ------------------------------------------------------------------------
     if (method === 'GET' && path.includes('/devices')) {
       const userSessions: DeviceSession[] = [];
@@ -435,21 +613,6 @@ serve(async (req: Request) => {
         if (session.userId === user.id && !session.isRevoked) {
           userSessions.push(session);
         }
-      }
-
-      if (userSessions.length === 0 && user.sessionId) {
-        userSessions.push({
-          id: user.sessionId,
-          userId: user.id,
-          deviceName: 'Current Browser Session',
-          browser: 'Web Browser',
-          os: 'Desktop',
-          ipAddress: clientIp,
-          isRevoked: false,
-          lastActiveAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-        });
       }
 
       return successResponse({
@@ -460,7 +623,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 8. DELETE /auth/devices/:id (Revoke Single Device)
+    // 8. DELETE /auth/devices/:id
     // ------------------------------------------------------------------------
     if (method === 'DELETE' && path.includes('/devices/')) {
       const targetSessionId = path.split('/devices/')[1]?.replace(/\/$/, '');
@@ -475,7 +638,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 9. DELETE /auth/devices (Revoke All Other Devices)
+    // 9. DELETE /auth/devices
     // ------------------------------------------------------------------------
     if (method === 'DELETE' && path.endsWith('/devices')) {
       let revokedCount = 0;
@@ -492,7 +655,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 10. POST /auth/change-password (Self-Service Password Change)
+    // 10. POST /auth/change-password
     // ------------------------------------------------------------------------
     if (method === 'POST' && path.includes('/change-password')) {
       const rawBody = await req.json();
@@ -507,6 +670,14 @@ serve(async (req: Request) => {
       }
 
       userPasswords.set(user.email.toLowerCase(), newPassword);
+
+      await logSecurityEvent({} as any, {
+        event_type: 'password_changed',
+        user_id: user.id,
+        email: user.email,
+        ip_address: clientIp,
+        severity: 'info',
+      });
 
       return successResponse({
         message: 'Password updated successfully. Please use your new password on next login.',
