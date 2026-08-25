@@ -16,12 +16,16 @@ import {
   RefreshCw,
   Users,
   LogOut,
+  Laptop,
+  KeyRound,
+  Clock,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const {
     activeView,
     setActiveView,
+    setActiveModal,
     isSidebarExpanded,
     setIsSidebarExpanded,
     alerts,
@@ -29,6 +33,7 @@ export const Sidebar: React.FC = () => {
     refreshData,
     seasonalInsight,
     userProfile,
+    sessionExpiresAt,
     signOut,
   } = useApp();
 
@@ -193,20 +198,38 @@ export const Sidebar: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1">
+              {isSidebarExpanded && (
+                <>
+                  <button
+                    onClick={() => setActiveModal('device_sessions')}
+                    className="p-1.5 rounded-xl text-[#788880] hover:text-[#079455] hover:bg-[#E0EAE4] transition-colors flex-shrink-0 cursor-pointer"
+                    title="Active Logged-in Devices"
+                  >
+                    <Laptop className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setActiveModal('change_password')}
+                    className="p-1.5 rounded-xl text-[#788880] hover:text-[#079455] hover:bg-[#E0EAE4] transition-colors flex-shrink-0 cursor-pointer"
+                    title="Change Password"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => signOut()}
-                className="p-2 rounded-xl text-[#788880] hover:text-[#D92D20] hover:bg-[#FEE4E2] transition-colors flex-shrink-0"
+                className="p-1.5 rounded-xl text-[#788880] hover:text-[#D92D20] hover:bg-[#FEE4E2] transition-colors flex-shrink-0 cursor-pointer"
                 title="Sign Out of MridaOS"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
               </button>
               <button
                 id="toggle-sidebar-button"
                 onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-                className="p-2 rounded-xl text-[#788880] hover:text-[#1A1A1A] hover:bg-[#EFF5F1] transition-colors flex-shrink-0"
+                className="p-1.5 rounded-xl text-[#788880] hover:text-[#1A1A1A] hover:bg-[#EFF5F1] transition-colors flex-shrink-0 cursor-pointer"
                 title={isSidebarExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
               >
-                {isSidebarExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {isSidebarExpanded ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>

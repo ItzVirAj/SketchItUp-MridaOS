@@ -22,6 +22,20 @@ export interface UserProfile {
   lastSignInAt?: string | null;
 }
 
+export interface DeviceSession {
+  id: string;
+  userId: string;
+  deviceName: string;
+  browser: string;
+  os: string;
+  ipAddress: string;
+  isRevoked: boolean;
+  lastActiveAt: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+
 export interface Branch {
   id: string;
   name: string;

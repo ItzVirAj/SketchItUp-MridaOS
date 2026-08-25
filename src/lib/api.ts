@@ -29,15 +29,18 @@ export interface ApiResponse<T> {
 }
 
 /**
- * Base fetch wrapper that attaches the active Supabase JWT
+ * Base fetch wrapper that attaches the active custom JWT or Supabase JWT
  */
 export async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || '';
+    let token = localStorage.getItem('mridaos_jwt_token') || '';
+    if (!token) {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token || '';
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -328,4 +331,62 @@ export const searchApi = {
     return apiFetch<{ results: SearchResultItem[]; total: number }>(`search?${query}`);
   },
 };
+
+// ==============================================================================
+// 5. CUSTOM SECURE JWT AUTH & DEVICE SESSION API
+// ==============================================================================
+export interface AuthLoginResponse {
+  token: string;
+  tokenType: string;
+  expiresIn: number;
+  expiresAt: string;
+  sessionId: string;
+  user: UserProfile;
+  session: any;
+}
+
+export const authApi = {
+  login: (email: string, password: string, deviceName?: string) =>
+    apiFetch<AuthLoginResponse>('auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, deviceName }),
+    }),
+
+  refresh: (sessionId: string) =>
+    apiFetch<{ token: string; expiresIn: number; expiresAt: string; sessionId: string }>('auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
+
+  logout: () =>
+    apiFetch<{ message: string }>('auth/logout', {
+      method: 'POST',
+    }),
+
+  getDevices: () =>
+    apiFetch<{ currentSessionId: string; devices: any[]; total: number }>('auth/devices'),
+
+  revokeDevice: (sessionId: string) =>
+    apiFetch<{ message: string; sessionId: string }>(`auth/devices/${sessionId}`, {
+      method: 'DELETE',
+    }),
+
+  revokeAllOtherDevices: () =>
+    apiFetch<{ message: string; revokedCount: number }>('auth/devices', {
+      method: 'DELETE',
+    }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiFetch<{ message: string }>('auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  resetPassword: (email: string, newPassword: string) =>
+    apiFetch<{ message: string }>('auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, newPassword }),
+    }),
+};
+
 

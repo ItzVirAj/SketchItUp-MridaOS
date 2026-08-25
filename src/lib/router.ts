@@ -146,6 +146,8 @@ export const MODAL_ROUTES: Record<ModalType, string> = {
   add_user: 'add-user',
   edit_user: 'edit-user',
   remove_user: 'remove-user',
+  device_sessions: 'devices',
+  change_password: 'change-password',
 };
 
 export const MODAL_ALIASES: Record<string, ModalType> = {
@@ -201,6 +203,17 @@ export const MODAL_ALIASES: Record<string, ModalType> = {
   'remove_user': 'remove_user',
   'delete-user': 'remove_user',
   'revoke-user': 'remove_user',
+
+  'devices': 'device_sessions',
+  'device_sessions': 'device_sessions',
+  'device-sessions': 'device_sessions',
+  'active-devices': 'device_sessions',
+  'sessions': 'device_sessions',
+
+  'change-password': 'change_password',
+  'change_password': 'change_password',
+  'update-password': 'change_password',
+  'password': 'change_password',
 };
 
 // ==============================================================================

@@ -21,6 +21,7 @@ import {
 } from '../types';
 import * as db from '../services/supabaseService';
 import { parseLocation, buildPathUrl, navigateTo } from '../lib/router';
+import { authApi } from '../lib/api';
 
 export type ModalType =
   | 'none'
@@ -33,7 +34,9 @@ export type ModalType =
   | 'live_camera'
   | 'add_user'
   | 'edit_user'
-  | 'remove_user';
+  | 'remove_user'
+  | 'device_sessions'
+  | 'change_password';
 
 export type ViewType =
   | 'command_center'
@@ -55,6 +58,8 @@ interface AppContextType {
   isLoadingAuth: boolean;
   authError: string | null;
   setAuthError: (err: string | null) => void;
+  loginWithJwt: (email: string, password: string, deviceName?: string) => Promise<{ success: boolean; error?: string }>;
+  sessionExpiresAt: string | null;
   signOut: () => Promise<void>;
 
   // Users Directory (Admin/Owner)
@@ -116,16 +121,19 @@ interface AppContextType {
     total: number;
     cashPaid: number;
     khataAmount: number;
+    paymentMode: 'cash' | 'upi' | 'card' | 'khata' | 'split';
   }) => Promise<void>;
 
   createPurchaseOrder: (poData: {
     supplierName: string;
-    itemsCount: number;
-    totalAmount: number;
+    expectedDelivery: string;
     paymentTerms: string;
+    notes?: string;
+    items: { itemId: string; name: string; qty: number; unitPrice: number; total: number }[];
+    totalAmount: number;
   }) => Promise<void>;
 
-  recordKhataPayment: (customerId: string, amount: number, paymentMode: string) => Promise<void>;
+  recordKhataPayment: (customerId: string, amount: number, paymentMode?: 'cash' | 'upi') => Promise<void>;
 
   addPlantCareTask: (task: Omit<PlantCareTask, 'id' | 'isCompleted'>) => Promise<void>;
 
@@ -133,7 +141,7 @@ interface AppContextType {
 
   toggleCareTask: (taskId: string) => Promise<void>;
 
-  dismissAlert: (alertId: string) => Promise<void>;
+  dismissAlert: (alertId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -145,6 +153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(null);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserProfile | null>(null);
 
@@ -178,17 +187,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [mortalityRecords, setMortalityRecords] = useState<MortalityRecord[]>([]);
 
   // ----------------------------------------------------------------------------
-  // AUTH LIFECYCLE (Supabase Session & Profile)
+  // AUTH LIFECYCLE (Custom 15-Minute JWT + Supabase Session)
   // ----------------------------------------------------------------------------
   const loadUserProfile = useCallback(async (user: User) => {
     try {
       const profile = await db.fetchUserProfile(user.id);
       if (profile) {
         if (profile.status === 'revoked') {
-          await supabase.auth.signOut();
-          setSession(null);
-          setCurrentUser(null);
-          setUserProfile(null);
+          await signOut();
           setAuthError('Your account has been revoked by an administrator. Please contact support.');
           return;
         }
@@ -212,26 +218,119 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  const loginWithJwt = async (email: string, password: string, deviceName?: string) => {
+    setAuthError(null);
+    try {
+      const res = await authApi.login(email, password, deviceName);
+      if (res.error || !res.data) {
+        return { success: false, error: res.error?.message || 'Login failed' };
+      }
+
+      const { token, expiresAt, sessionId, user } = res.data;
+      localStorage.setItem('mridaos_jwt_token', token);
+      localStorage.setItem('mridaos_token_exp', expiresAt);
+      localStorage.setItem('mridaos_session_id', sessionId);
+      localStorage.setItem('mridaos_user_profile', JSON.stringify(user));
+
+      setSessionExpiresAt(expiresAt);
+      setUserProfile(user);
+      setCurrentUser({
+        id: user.id,
+        email: user.email,
+        app_metadata: {},
+        user_metadata: { full_name: user.fullName, role: user.role, branch_id: user.branchId },
+        aud: 'authenticated',
+        created_at: user.createdAt,
+      } as any);
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Login failed' };
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // Ignore network errors on logout
+    }
+    localStorage.removeItem('mridaos_jwt_token');
+    localStorage.removeItem('mridaos_token_exp');
+    localStorage.removeItem('mridaos_session_id');
+    localStorage.removeItem('mridaos_user_profile');
+
+    await supabase.auth.signOut().catch(() => {});
+    setSession(null);
+    setCurrentUser(null);
+    setUserProfile(null);
+    setSessionExpiresAt(null);
+    setActiveView('command_center');
+    setActiveModal('none');
+  };
+
+  // 15-Minute Expiration Watchdog & Token Check
   useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setCurrentUser(session?.user ?? null);
-      if (session?.user) {
-        loadUserProfile(session.user).finally(() => setIsLoadingAuth(false));
+    const checkExpiration = () => {
+      const exp = localStorage.getItem('mridaos_token_exp');
+      if (exp) {
+        const expTime = new Date(exp).getTime();
+        const now = Date.now();
+        if (now >= expTime) {
+          signOut();
+          setAuthError('Your 15-minute secure login window has expired. Please log in again.');
+        }
+      }
+    };
+
+    const interval = setInterval(checkExpiration, 5000); // Check every 5s
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Check Custom JWT token first
+    const storedToken = localStorage.getItem('mridaos_jwt_token');
+    const storedExp = localStorage.getItem('mridaos_token_exp');
+    const storedProfile = localStorage.getItem('mridaos_user_profile');
+
+    if (storedToken && storedExp && storedProfile) {
+      const expTime = new Date(storedExp).getTime();
+      if (Date.now() < expTime) {
+        const parsedProfile = JSON.parse(storedProfile);
+        setUserProfile(parsedProfile);
+        setSessionExpiresAt(storedExp);
+        setCurrentUser({
+          id: parsedProfile.id,
+          email: parsedProfile.email,
+          app_metadata: {},
+          user_metadata: { full_name: parsedProfile.fullName, role: parsedProfile.role, branch_id: parsedProfile.branchId },
+          aud: 'authenticated',
+          created_at: parsedProfile.createdAt,
+        } as any);
+        setIsLoadingAuth(false);
       } else {
+        signOut();
         setIsLoadingAuth(false);
       }
-    });
+    } else {
+      // Fallback to Supabase GoTrue Auth
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        setCurrentUser(session?.user ?? null);
+        if (session?.user) {
+          loadUserProfile(session.user).finally(() => setIsLoadingAuth(false));
+        } else {
+          setIsLoadingAuth(false);
+        }
+      });
+    }
 
-    // Listen for auth changes
+    // Listen for Supabase auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setCurrentUser(session?.user ?? null);
-      if (session?.user) {
+      if (session?.user && !localStorage.getItem('mridaos_jwt_token')) {
+        setSession(session);
+        setCurrentUser(session.user);
         await loadUserProfile(session.user);
-      } else {
-        setUserProfile(null);
       }
       setIsLoadingAuth(false);
     });
@@ -272,15 +371,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveModal(modal);
     navigateTo(activeView, modal);
   }, [activeView]);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setCurrentUser(null);
-    setUserProfile(null);
-    setActiveView('command_center');
-    setActiveModal('none');
-  };
 
   // ----------------------------------------------------------------------------
   // USERS DIRECTORY MANAGEMENT (Admin & Owner)
@@ -696,6 +786,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLoadingAuth,
         authError,
         setAuthError,
+        loginWithJwt,
+        sessionExpiresAt,
         signOut,
         usersList,
         fetchUsersList,

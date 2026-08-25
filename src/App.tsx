@@ -33,6 +33,8 @@ import { LiveCameraModal } from './components/modals/LiveCameraModal';
 import { AddUserModal } from './components/modals/AddUserModal';
 import { EditUserModal } from './components/modals/EditUserModal';
 import { RemoveUserModal } from './components/modals/RemoveUserModal';
+import { DeviceSessionsModal } from './components/modals/DeviceSessionsModal';
+import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 
 const MainLayout: React.FC = () => {
   const {
@@ -152,6 +154,8 @@ const MainLayout: React.FC = () => {
       {activeModal === 'add_user' && <AddUserModal />}
       {activeModal === 'edit_user' && <EditUserModal />}
       {activeModal === 'remove_user' && <RemoveUserModal />}
+      {activeModal === 'device_sessions' && <DeviceSessionsModal />}
+      {activeModal === 'change_password' && <ChangePasswordModal />}
     </div>
   );
 };

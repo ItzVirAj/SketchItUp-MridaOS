@@ -16,17 +16,15 @@ import {
 } from 'lucide-react';
 
 const SEED_DEV_ACCOUNTS = [
-  { email: 'owner@mridaos.in', role: 'Owner / Super Admin', name: 'Santosh Deshmukh', color: '#079455' },
-  { email: 'admin@mridaos.in', role: 'System Admin', name: 'Priya Kulkarni', color: '#175CD3' },
-  { email: 'counterstaff@mridaos.in', role: 'Counter POS Staff', name: 'Suresh Patil', color: '#B54708' },
-  { email: 'inventory@mridaos.in', role: 'Inventory Manager', name: 'Rahul Shinde', color: '#7A5E0B' },
-  { email: 'procurement@mridaos.in', role: 'Procurement Officer', name: 'Anjali Gaikwad', color: '#0E7090' },
-  { email: 'nurserycare@mridaos.in', role: 'Nursery Care Lead', name: 'Vikas Jadhav', color: '#079455' },
-  { email: 'accounts@mridaos.in', role: 'Accounts / Khata', name: 'Kavita Joshi', color: '#C01048' },
+  { email: 'admin@mridaos.in', role: 'System Admin', name: 'Jethalal Gada', color: '#175CD3' },
+  { email: 'owner@mridaos.in', role: 'Owner / Super Admin', name: 'Champaklal Gada', color: '#079455' },
+  { email: 'counter@mridaos.in', role: 'Counter POS Staff', name: 'Natu Kaka', color: '#B54708' },
+  { email: 'procurement@mridaos.in', role: 'Procurement Officer', name: 'Bagha Boy', color: '#0E7090' },
+  { email: 'inventory@mridaos.in', role: 'Inventory Manager', name: 'Taarak Mehta', color: '#7A5E0B' },
 ];
 
 export const LoginPage: React.FC = () => {
-  const { authError, setAuthError } = useApp();
+  const { authError, setAuthError, loginWithJwt } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -45,17 +43,9 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
-
-      if (error) {
-        if (error.message.toLowerCase().includes('invalid login credentials')) {
-          setLocalError('Invalid email or password. Please verify your credentials.');
-        } else {
-          setLocalError(error.message);
-        }
+      const res = await loginWithJwt(email.trim().toLowerCase(), password);
+      if (!res.success) {
+        setLocalError(res.error || 'Invalid email or password. Please verify your credentials.');
       }
     } catch (err: any) {
       setLocalError(err.message || 'An unexpected error occurred during login.');
@@ -66,18 +56,15 @@ export const LoginPage: React.FC = () => {
 
   const handleDevQuickLogin = async (devEmail: string) => {
     setEmail(devEmail);
-    setPassword('MridaOS@2026');
+    setPassword('Admin@1234');
     setLocalError(null);
     setAuthError(null);
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: devEmail,
-        password: 'MridaOS@2026',
-      });
-      if (error) {
-        setLocalError(`Dev login failed: ${error.message}`);
+      const res = await loginWithJwt(devEmail, 'Admin@1234');
+      if (!res.success) {
+        setLocalError(`Login failed: ${res.error}`);
       }
     } catch (err: any) {
       setLocalError(err.message || 'Dev login error');

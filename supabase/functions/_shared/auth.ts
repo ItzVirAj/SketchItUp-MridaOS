@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { errorResponse } from './response.ts';
+import { verifyJwt } from './jwt.ts';
 
 export interface AuthenticatedUser {
   id: string;
@@ -8,6 +9,7 @@ export interface AuthenticatedUser {
   role: string;
   branchId?: string;
   status: string;
+  sessionId?: string;
 }
 
 export const getSupabaseClient = (req: Request): SupabaseClient => {
@@ -52,29 +54,36 @@ export const authenticateUser = async (
     };
   }
 
-  const token = authHeader.replace('Bearer ', '');
+  const token = authHeader.replace('Bearer ', '').trim();
+
+  // 1. Try Custom 15-Minute JWT Verification first (Fast, cryptographic HMAC-SHA256)
+  const jwtResult = await verifyJwt(token);
+  if (jwtResult.isValid && jwtResult.payload) {
+    const payload = jwtResult.payload;
+    const authenticatedUser: AuthenticatedUser = {
+      id: payload.sub,
+      email: payload.email,
+      fullName: payload.fullName,
+      role: payload.role,
+      branchId: payload.branchId || 'nashik-central',
+      status: 'active',
+      sessionId: payload.sessionId,
+    };
+
+    return {
+      user: authenticatedUser,
+      error: null,
+      client,
+    };
+  }
+
+  // 2. Fallback: Supabase GoTrue Auth verification
   const { data: { user }, error } = await client.auth.getUser(token);
 
   if (error || !user) {
     return {
       user: null,
-      error: errorResponse('UNAUTHORIZED', 'Invalid or expired session token', 401),
-      client,
-    };
-  }
-
-  // Fetch full profile from profiles table
-  const { data: profile } = await client
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-
-  const userStatus = profile?.status || 'active';
-  if (userStatus === 'revoked') {
-    return {
-      user: null,
-      error: errorResponse('FORBIDDEN', 'User account is revoked. Access denied.', 403),
+      error: errorResponse('UNAUTHORIZED', jwtResult.error || 'Invalid or expired 15-minute session token', 401),
       client,
     };
   }
@@ -82,10 +91,10 @@ export const authenticateUser = async (
   const authenticatedUser: AuthenticatedUser = {
     id: user.id,
     email: user.email || '',
-    fullName: profile?.full_name || user.user_metadata?.full_name || 'Staff User',
-    role: profile?.role || user.user_metadata?.role || 'counter_staff',
-    branchId: profile?.branch_id || user.user_metadata?.branch_id || 'nashik-central',
-    status: userStatus,
+    fullName: user.user_metadata?.full_name || 'Staff User',
+    role: user.user_metadata?.role || 'counter_staff',
+    branchId: user.user_metadata?.branch_id || 'nashik-central',
+    status: 'active',
   };
 
   return {
