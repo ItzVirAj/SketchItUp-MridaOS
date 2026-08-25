@@ -157,6 +157,13 @@ html.lenis, html.lenis body {
   background: #A0B5AA;
 }
 
+/* Light Mode Global Base */
+html:not(.dark),
+html:not(.dark) body {
+  background-color: #F6F8F6;
+  color: #1A1A1A;
+}
+
 /* Agriculture Dark Mode Global UI Overrides */
 html.dark {
   background-color: #1A1F1A;
