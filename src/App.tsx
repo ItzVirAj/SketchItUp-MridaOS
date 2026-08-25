@@ -8,14 +8,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { MetricCards } from './components/MetricCards';
-import { ActionRequired } from './components/ActionRequired';
 import { NurseryCameraAndSensors } from './components/NurseryCameraAndSensors';
-import { SalesAnalytics } from './components/SalesAnalytics';
-import { InventoryIntelligence } from './components/InventoryIntelligence';
-import { KhataLedger } from './components/KhataLedger';
-import { ProcurementSection } from './components/ProcurementSection';
-import { SeasonalIntelligence } from './components/SeasonalIntelligence';
-import { ComplianceAndActivity } from './components/ComplianceAndActivity';
 import { DedicatedViews } from './components/views/DedicatedViews';
 import { NotFoundView } from './components/views/NotFoundView';
 import { ResetPasswordView } from './components/views/ResetPasswordView';
@@ -116,27 +109,6 @@ const MainLayout: React.FC = () => {
 
                 {/* 2. Visual CCTV Camera Feeds, Device Sensors & Daily Care Tasks */}
                 <NurseryCameraAndSensors />
-
-                {/* 3. Action Required Bar (Immediate Operational Decisions) */}
-                <ActionRequired />
-
-                {/* 4. Sales Velocity Trends, Anomaly Radar & Operating Margins */}
-                <SalesAnalytics />
-
-                {/* 5. Inventory Intelligence & FEFO Expiry Radar */}
-                <InventoryIntelligence />
-
-                {/* 6. Khata Credit Health & Farmer Ledger */}
-                <KhataLedger />
-
-                {/* 7. Procurement & Inbound Supplier POs */}
-                <ProcurementSection />
-
-                {/* 8. Seasonal Agricultural Sowing Forecast */}
-                <SeasonalIntelligence />
-
-                {/* 9. Statutory FCO Compliance & Immutable Audit Trail */}
-                <ComplianceAndActivity />
               </>
             ) : (
               <DedicatedViews />
