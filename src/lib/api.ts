@@ -20,7 +20,9 @@ import {
 } from '../types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://erhabsohsdpusepjplup.supabase.co';
-const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
+const FUNCTIONS_URL = import.meta.env.DEV
+  ? '/functions/v1'
+  : `${SUPABASE_URL}/functions/v1`;
 
 export interface ApiResponse<T> {
   data: T | null;
