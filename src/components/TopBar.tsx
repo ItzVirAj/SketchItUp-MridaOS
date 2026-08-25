@@ -5,8 +5,6 @@ import {
   ArrowUpRight,
   Database,
   RefreshCw,
-  LogOut,
-  User,
   Search,
 } from 'lucide-react';
 
@@ -19,8 +17,6 @@ export const TopBar: React.FC = () => {
     setIsSearchOpen,
     isSupabaseConnected,
     refreshData,
-    userProfile,
-    signOut,
   } = useApp();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -30,15 +26,6 @@ export const TopBar: React.FC = () => {
     await refreshData();
     setTimeout(() => setIsRefreshing(false), 600);
   };
-
-  const initials = userProfile?.fullName
-    ? userProfile.fullName
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase()
-    : 'MO';
 
   return (
     <header
@@ -116,34 +103,10 @@ export const TopBar: React.FC = () => {
             <span>{alerts.length} Alerts</span>
             <ArrowUpRight className="w-3.5 h-3.5 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </button>
-
-          {/* User Profile Pill & Sign Out */}
-          <div className="flex items-center gap-1.5 pl-1">
-            <div className="flex items-center gap-2 bg-[#F9FBFA] border border-[#E0EAE4] py-1 px-2.5 rounded-full shadow-2xs">
-              <div className="w-6 h-6 rounded-full bg-[#079455] text-white font-bold text-[10px] flex items-center justify-center">
-                {initials}
-              </div>
-              <div className="hidden xl:flex flex-col text-left">
-                <span className="text-xs font-bold text-[#1A1A1A] leading-none">
-                  {userProfile?.fullName || 'User'}
-                </span>
-                <span className="text-[9px] text-[#7A8B82] capitalize font-medium">
-                  {userProfile?.role?.replace('_', ' ') || 'Staff'}
-                </span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => signOut()}
-              className="p-1.5 rounded-full hover:bg-[#FEE4E2] text-[#788880] hover:text-[#D92D20] transition-colors"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
         </div>
 
       </div>
     </header>
   );
 };
+
