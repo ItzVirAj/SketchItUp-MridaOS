@@ -13,7 +13,9 @@ import {
 import { ActivityLog } from '../types';
 
 export const ComplianceAndActivity: React.FC = () => {
-  const { licenses, activities, setActiveView } = useApp();
+  const { licenses = [], activities = [], setActiveView } = useApp();
+  const safeLicenses = licenses || [];
+  const safeActivities = activities || [];
 
   const getActivityIcon = (tag: ActivityLog['tag']) => {
     switch (tag) {
@@ -59,12 +61,12 @@ export const ComplianceAndActivity: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-2.5">
-            {licenses.length === 0 ? (
+            {safeLicenses.length === 0 ? (
               <div className="p-4 text-center text-xs text-[#7A8B82] bg-[#F9FBF9] rounded-2xl border border-dashed border-[#DDE5E0]">
                 No compliance licenses registered in database yet.
               </div>
             ) : (
-              licenses.map((lic) => {
+              safeLicenses.map((lic) => {
                 const isDue = lic.status === 'renewal_due';
                 return (
                   <div
@@ -146,12 +148,12 @@ export const ComplianceAndActivity: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-2">
-            {activities.length === 0 ? (
+            {safeActivities.length === 0 ? (
               <div className="p-4 text-center text-xs text-[#7A8B82] bg-[#F9FBF9] rounded-2xl border border-dashed border-[#DDE5E0]">
                 No recent activity logged yet. Operations will stream here in real-time.
               </div>
             ) : (
-              activities.slice(0, 4).map((act) => (
+              safeActivities.slice(0, 4).map((act) => (
                 <div
                   key={act.id}
                   className="p-2.5 rounded-2xl bg-[#F9FBFA] hover:bg-[#F2F7F4] border border-[#E8EFEA] transition-all flex items-start justify-between gap-3"

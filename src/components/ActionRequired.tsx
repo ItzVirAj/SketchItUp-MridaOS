@@ -15,7 +15,8 @@ import {
 import { OperationalAlert } from '../types';
 
 export const ActionRequired: React.FC = () => {
-  const { alerts, dismissAlert, setActiveModal, setActiveView } = useApp();
+  const { alerts = [], dismissAlert, setActiveModal, setActiveView } = useApp();
+  const safeAlerts = alerts || [];
 
   const handleActionClick = (alert: OperationalAlert) => {
     switch (alert.actionType) {
@@ -57,7 +58,7 @@ export const ActionRequired: React.FC = () => {
     }
   };
 
-  if (alerts.length === 0) {
+  if (safeAlerts.length === 0) {
     return (
       <div className="bg-white rounded-3xl p-6 border border-[#E2EAE5] card-shadow flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -92,14 +93,14 @@ export const ActionRequired: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-[#B54708] bg-[#FEF0C7] px-2.5 py-0.5 rounded-full">
-            {alerts.length} Pending Actions
+            {safeAlerts.length} Pending Actions
           </span>
         </div>
       </div>
 
       {/* Grid of Alert Cards (styled like Reference Image 1 & 5 alerts) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {alerts.map((alert) => {
+        {safeAlerts.map((alert) => {
           const isCritical = alert.severity === 'critical';
           const isWarning = alert.severity === 'warning';
 

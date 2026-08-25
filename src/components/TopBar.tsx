@@ -2,51 +2,43 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Bell,
-  Search,
-  ChevronDown,
-  Calendar,
-  Layers,
-  Store,
-  Flower2,
   ArrowUpRight,
   Database,
   RefreshCw,
+  LogOut,
+  User,
+  Search,
 } from 'lucide-react';
-import { BusinessType } from '../types';
 
 export const TopBar: React.FC = () => {
   const {
-    currentBranch,
-    setCurrentBranch,
     branches,
-    businessType,
-    setBusinessType,
     alerts,
     setActiveModal,
-    searchQuery,
-    setSearchQuery,
-    dateRange,
-    setDateRange,
+    isSearchOpen,
+    setIsSearchOpen,
     isSupabaseConnected,
-    isLoading,
     refreshData,
+    userProfile,
+    signOut,
   } = useApp();
 
-  const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
-  const [isDateDropdownOpen, setIsDateDropdownOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const businessTypes: { type: BusinessType; label: string; icon: any }[] = [
-    { type: 'hybrid', label: 'Hybrid Agro-Retail', icon: Layers },
-    { type: 'fertilizer', label: 'Fertilizer & Agri-Inputs', icon: Store },
-    { type: 'nursery', label: 'Plant Nursery & Care', icon: Flower2 },
-  ];
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refreshData();
     setTimeout(() => setIsRefreshing(false), 600);
   };
+
+  const initials = userProfile?.fullName
+    ? userProfile.fullName
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'MO';
 
   return (
     <header
@@ -55,53 +47,32 @@ export const TopBar: React.FC = () => {
     >
       <div className="flex items-center justify-between gap-3 w-full py-0.5">
         
-        {/* 1. Far Left: sketchItUP Brand Logo */}
-        <div className="flex items-center flex-shrink-0 mr-1 sm:mr-2">
+        {/* 1. Far Left: sketchItUP Brand Logo & System Title */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div className="flex items-center text-[19px] sm:text-[21px] font-black tracking-tight leading-none text-[#1A1A1A]">
             <span>sketch<span className="text-[#079455]">ItUP</span></span>
           </div>
+          <span className="hidden sm:inline-block text-xs font-semibold text-[#8C9C93] border-l border-[#DDE5E0] pl-2.5 ml-1">
+            MridaOS Retail Terminal
+          </span>
         </div>
 
-        {/* 2. Search SKU / Batch / Farmer Pill */}
-        <div className="relative flex-1 min-w-[140px] max-w-xs sm:max-w-sm">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#7A8B82]" />
-          <input
-            id="topbar-search-input"
-            type="text"
-            placeholder="Search SKU, Batch, Farmer..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3.5 py-1.5 bg-[#F6F8F6] focus:bg-white rounded-full border border-[#E0EAE4] text-xs font-medium text-[#1A1A1A] placeholder-[#8C9C93] focus:outline-none focus:ring-2 focus:ring-[#079455]/30 focus:border-[#079455] transition-all shadow-2xs"
-          />
+        {/* 2. Center: Operating Branch Badge */}
+        <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-[#F9FBFA] border border-[#E0EAE4] rounded-full text-xs text-[#54645B]">
+          <span className="text-[#7A8B82]">Hub:</span>
+          <span className="font-bold text-[#1A1A1A]">
+            {branches[0]?.name || 'Nashik Central Agro-Hub'}
+          </span>
+          <span className="text-[10px] text-[#079455] bg-[#E0EAE4] font-bold px-1.5 py-0.2 rounded-full">
+            Live
+          </span>
         </div>
 
-        {/* 3. Business Mode Segmented Pill Tabs */}
-        <div className="hidden lg:flex items-center bg-[#F2F6F3] p-1 rounded-full border border-[#E0EAE4] shadow-2xs gap-0.5 flex-shrink-0">
-          {businessTypes.map(({ type, label, icon: Icon }) => {
-            const isActive = businessType === type;
-            return (
-              <button
-                key={type}
-                id={`business-mode-${type}`}
-                onClick={() => setBusinessType(type)}
-                className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
-                  isActive
-                    ? 'bg-[#1A1A1A] text-white shadow-2xs'
-                    : 'text-[#64746B] hover:text-[#1A1A1A] hover:bg-[#E8EFEA]'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Right Group: Supabase Status, Alerts, Date, Branch */}
+        {/* 3. Right Group: Supabase Status, Alerts, User Profile & Sign Out */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
           {/* Supabase Connection Status Badge */}
           <div
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-all ${
               isSupabaseConnected
                 ? 'bg-[#E0EAE4] text-[#079455] border-[#B7D5C4]'
                 : 'bg-[#FEE4E2] text-[#D92D20] border-[#FECDCA]'
@@ -109,17 +80,31 @@ export const TopBar: React.FC = () => {
             title={isSupabaseConnected ? 'Connected to Supabase PostgreSQL Storage' : 'Supabase credentials missing or disconnected'}
           >
             <Database className="w-3.5 h-3.5" />
-            <span>{isSupabaseConnected ? 'Supabase Live' : 'Offline Storage'}</span>
+            <span className="hidden sm:inline">{isSupabaseConnected ? 'Supabase Live' : 'Offline Storage'}</span>
             <button
               onClick={handleRefresh}
-              className={`ml-1 hover:opacity-75 ${isRefreshing || isLoading ? 'animate-spin' : ''}`}
+              className={`ml-1 hover:opacity-75 ${isRefreshing ? 'animate-spin' : ''}`}
               title="Refresh Realtime Data"
             >
               <RefreshCw className="w-3 h-3" />
             </button>
           </div>
 
-          {/* 4. Alerts Button */}
+          {/* Global Spotlight Search Trigger Pill */}
+          <button
+            id="topbar-global-search"
+            onClick={() => setIsSearchOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-[#F4EDDE] hover:bg-[#E0EAE4] text-[#1A1A1A] border border-[#CCD8D1] rounded-full text-xs font-bold transition-all shadow-2xs group cursor-pointer"
+            title="Global Search (Ctrl+K / ⌘K)"
+          >
+            <Search className="w-3.5 h-3.5 text-[#079455]" />
+            <span className="hidden md:inline">Quick Search</span>
+            <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[10px] font-mono font-bold bg-white text-[#6E7B74] border border-[#CCD8D1] rounded shadow-2xs">
+              ⌘K
+            </kbd>
+          </button>
+
+          {/* Alerts Button */}
           <button
             id="topbar-alerts-pill"
             onClick={() => setActiveModal('quick_view_alerts')}
@@ -130,100 +115,29 @@ export const TopBar: React.FC = () => {
             <ArrowUpRight className="w-3.5 h-3.5 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </button>
 
-          {/* 5. Date Selector Pill */}
-          <div className="relative">
-            <button
-              id="date-filter-button"
-              onClick={() => setIsDateDropdownOpen(!isDateDropdownOpen)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-[#E0EAE4] rounded-full text-xs font-semibold text-[#1A1A1A] hover:bg-[#F8FAF9] transition-all shadow-2xs whitespace-nowrap"
-            >
-              <Calendar className="w-3.5 h-3.5 text-[#079455]" />
-              <span>
-                {dateRange === 'today'
-                  ? 'Today (Live)'
-                  : dateRange === '7d'
-                  ? 'Last 7 Days'
-                  : dateRange === '30d'
-                  ? 'Last 30 Days'
-                  : 'Current Season'}
-              </span>
-              <ChevronDown className="w-3 h-3 text-[#7A8B82]" />
-            </button>
-
-            {isDateDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-[#E0EAE4] py-1.5 z-50">
-                {(['today', '7d', '30d', 'season'] as const).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => {
-                      setDateRange(r);
-                      setIsDateDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-3.5 py-1.5 text-xs font-medium capitalize hover:bg-[#F2F7F4] flex items-center justify-between ${
-                      dateRange === r ? 'text-[#079455] font-bold bg-[#EFF6F2]' : 'text-[#333]'
-                    }`}
-                  >
-                    <span>
-                      {r === 'today'
-                        ? 'Today (Live)'
-                        : r === '7d'
-                        ? 'Past 7 Days'
-                        : r === '30d'
-                        ? 'Past 30 Days'
-                        : 'Active Crop Season'}
-                    </span>
-                    {dateRange === r && <span className="w-1.5 h-1.5 rounded-full bg-[#079455]"></span>}
-                  </button>
-                ))}
+          {/* User Profile Pill & Sign Out */}
+          <div className="flex items-center gap-1.5 pl-1">
+            <div className="flex items-center gap-2 bg-[#F9FBFA] border border-[#E0EAE4] py-1 px-2.5 rounded-full shadow-2xs">
+              <div className="w-6 h-6 rounded-full bg-[#079455] text-white font-bold text-[10px] flex items-center justify-center">
+                {initials}
               </div>
-            )}
-          </div>
-
-          {/* 6. Branch Selector Dropdown */}
-          <div className="relative">
-            <button
-              id="branch-selector-button"
-              onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-[#E0EAE4] rounded-full text-xs font-semibold text-[#1A1A1A] hover:bg-[#F8FAF9] transition-all shadow-2xs whitespace-nowrap"
-            >
-              <span className="text-[#7A8B82] font-normal">Branch:</span>
-              <span className="font-semibold">{currentBranch ? currentBranch.name.split(' (')[0] : 'All Branches'}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-[#7A8B82]" />
-            </button>
-
-            {isBranchDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-[#E0EAE4] py-2 z-50">
-                <div className="px-3 py-1.5 border-b border-[#F0F5F2] text-[10px] uppercase font-bold text-[#8C9C93] tracking-wider">
-                  Select Operating Branch
-                </div>
-                {branches.length === 0 ? (
-                  <div className="px-3.5 py-2 text-xs text-[#7A8B82]">No branches in database.</div>
-                ) : (
-                  branches.map((b) => (
-                    <button
-                      key={b.id}
-                      onClick={() => {
-                        setCurrentBranch(b);
-                        setIsBranchDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3.5 py-2 hover:bg-[#F2F7F4] flex flex-col transition-colors ${
-                        currentBranch?.id === b.id ? 'bg-[#EFF6F2]' : ''
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`text-xs font-bold ${currentBranch?.id === b.id ? 'text-[#079455]' : 'text-[#1A1A1A]'}`}>
-                          {b.name}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E0EAE4] text-[#079455] font-semibold capitalize">
-                          {b.type}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-[#7A8B82] truncate">{b.location}</span>
-                    </button>
-                  ))
-                )}
+              <div className="hidden xl:flex flex-col text-left">
+                <span className="text-xs font-bold text-[#1A1A1A] leading-none">
+                  {userProfile?.fullName || 'User'}
+                </span>
+                <span className="text-[9px] text-[#7A8B82] capitalize font-medium">
+                  {userProfile?.role?.replace('_', ' ') || 'Staff'}
+                </span>
               </div>
-            )}
+            </div>
+
+            <button
+              onClick={() => signOut()}
+              className="p-1.5 rounded-full hover:bg-[#FEE4E2] text-[#788880] hover:text-[#D92D20] transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
 

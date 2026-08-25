@@ -15,10 +15,20 @@ import {
 } from 'lucide-react';
 
 export const NurseryCameraAndSensors: React.FC = () => {
-  const { sensors, careTasks, toggleCareTask, cameras: liveCameras, setActiveModal, setActiveView } = useApp();
+  const {
+    sensors = [],
+    careTasks = [],
+    toggleCareTask,
+    cameras: liveCameras = [],
+    setActiveModal,
+    setActiveView,
+  } = useApp();
 
   const [currentCameraIdx, setCurrentCameraIdx] = useState(0);
   const [isPhotoSnapped, setIsPhotoSnapped] = useState(false);
+
+  const safeCareTasks = careTasks || [];
+  const safeSensors = sensors || [];
 
   const fallbackCameras = [
     {
@@ -48,10 +58,10 @@ export const NurseryCameraAndSensors: React.FC = () => {
   ];
 
   const cameras = liveCameras && liveCameras.length > 0 ? liveCameras : fallbackCameras;
-  const currentCam = cameras[currentCameraIdx] || cameras[0];
+  const currentCam = cameras[currentCameraIdx] || cameras[0] || fallbackCameras[0];
 
-  const completedCount = careTasks.filter((t) => t.isCompleted).length;
-  const progressPercent = careTasks.length > 0 ? Math.round((completedCount / careTasks.length) * 100) : 100;
+  const completedCount = safeCareTasks.filter((t) => t.isCompleted).length;
+  const progressPercent = safeCareTasks.length > 0 ? Math.round((completedCount / safeCareTasks.length) * 100) : 100;
 
   const handleSnapPhoto = () => {
     setIsPhotoSnapped(true);
@@ -170,18 +180,18 @@ export const NurseryCameraAndSensors: React.FC = () => {
             </div>
 
             <span className="text-[10px] font-bold text-[#1A1A1A] bg-[#EFF5F1] px-2 py-1 rounded-xl">
-              {sensors.length} Active
+              {safeSensors.length} Active
             </span>
           </div>
 
           {/* List of sensors with status dots */}
           <div className="flex flex-col gap-2">
-            {sensors.length === 0 ? (
+            {safeSensors.length === 0 ? (
               <div className="p-4 text-center text-xs text-[#7A8B82] bg-[#F9FBF9] rounded-2xl border border-dashed border-[#DDE5E0]">
                 No active IoT sensors registered yet.
               </div>
             ) : (
-              sensors.map((sensor) => {
+              safeSensors.map((sensor) => {
                 const isWarning = sensor.status === 'warning';
                 return (
                   <div

@@ -10,7 +10,7 @@ export const isSupabaseConfigured = Boolean(
   !supabaseUrl.includes('your-project-id')
 );
 
-// Graceful dummy client fallback to prevent crashes if credentials are not yet set
+// Graceful dummy client fallback
 const dummyClient = {
   from: () => ({
     select: () => Promise.resolve({ data: [], error: null }),
@@ -19,19 +19,27 @@ const dummyClient = {
     delete: () => Promise.resolve({ data: null, error: null }),
     upsert: () => Promise.resolve({ data: null, error: null }),
   }),
+  auth: {
+    getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+    getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+    signInWithPassword: () => Promise.resolve({ data: {}, error: new Error('Supabase not configured') }),
+    signOut: () => Promise.resolve({ error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+  },
   channel: () => ({
     on: function() { return this; },
     subscribe: () => ({ unsubscribe: () => {} }),
   }),
   removeChannel: () => {},
+  rpc: () => Promise.resolve({ data: null, error: null }),
 } as unknown as SupabaseClient;
 
 export const supabase: SupabaseClient = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
       },
       realtime: {
         params: {
@@ -45,18 +53,17 @@ export const checkSupabaseConnection = async (): Promise<{ ok: boolean; message?
   if (!isSupabaseConfigured) {
     return {
       ok: false,
-      message: 'Supabase credentials missing in .env.local (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)',
+      message: 'Supabase credentials missing in .env (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)',
     };
   }
 
   try {
     const { error } = await supabase.from('branches').select('id').limit(1);
     if (error) {
-      // If table does not exist, schema needs running
       if (error.code === '42P01') {
         return {
           ok: false,
-          message: 'Supabase connected! Tables not found. Please run supabase_schema.sql in your Supabase SQL Editor.',
+          message: 'Supabase connected! Tables not found.',
         };
       }
       return { ok: false, message: error.message };

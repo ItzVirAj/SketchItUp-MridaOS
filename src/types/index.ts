@@ -1,5 +1,27 @@
 export type BusinessType = 'hybrid' | 'fertilizer' | 'nursery';
 
+export type UserRole =
+  | 'owner'
+  | 'counter_staff'
+  | 'inventory_manager'
+  | 'procurement_user'
+  | 'nursery_care_staff'
+  | 'accounts_user'
+  | 'admin';
+
+export type UserStatus = 'active' | 'revoked';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  branchId?: string | null;
+  status: UserStatus;
+  createdAt: string;
+  lastSignInAt?: string | null;
+}
+
 export interface Branch {
   id: string;
   name: string;

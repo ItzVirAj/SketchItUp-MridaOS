@@ -11,7 +11,8 @@ import {
 import { PurchaseOrder } from '../types';
 
 export const ProcurementSection: React.FC = () => {
-  const { purchaseOrders, setActiveModal, setActiveView } = useApp();
+  const { purchaseOrders = [], setActiveModal, setActiveView } = useApp();
+  const safePOs = purchaseOrders || [];
 
   const getStatusBadge = (status: PurchaseOrder['status']) => {
     switch (status) {
@@ -84,20 +85,13 @@ export const ProcurementSection: React.FC = () => {
       </div>
 
       {/* Grid of Purchase Orders */}
-      {purchaseOrders.length === 0 ? (
+      {safePOs.length === 0 ? (
         <div className="py-12 px-4 text-center bg-[#F9FBF9] rounded-2xl border border-dashed border-[#CCD8D0]">
           <Truck className="w-8 h-8 text-[#8C9C93] mx-auto mb-2 opacity-50" />
-          <p className="text-sm font-bold text-[#1A1A1A]">No Purchase Orders</p>
+          <p className="text-sm font-bold text-[#1A1A1A]">No Purchase Orders Issued Yet</p>
           <p className="text-xs text-[#6E7B74] mt-1 max-w-sm mx-auto">
-            You have no active or historical procurement purchase orders.
+            Click "+ Create Purchase Order" above to issue an inward order to fertilizer and seed distributors.
           </p>
-          <button
-            onClick={() => setActiveModal('create_po')}
-            className="mt-3 px-3.5 py-1.5 rounded-xl bg-[#1A1A1A] text-white text-xs font-bold shadow-2xs inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Issue Purchase Order</span>
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">

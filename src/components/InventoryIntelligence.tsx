@@ -14,24 +14,25 @@ import {
 import { InventoryItem, Batch } from '../types';
 
 export const InventoryIntelligence: React.FC = () => {
-  const { inventory, setActiveModal, setActiveView } = useApp();
+  const { inventory = [], setActiveModal, setActiveView } = useApp();
+  const safeInventory = inventory || [];
   const [filterTab, setFilterTab] = useState<'all' | 'expiring' | 'low_stock' | 'fast_moving' | 'slow_moving'>('expiring');
   const [localSearch] = useState('');
 
   // Collect all batches for FEFO analysis
   const allBatches: { item: InventoryItem; batch: Batch }[] = [];
-  inventory.forEach((item) => {
+  safeInventory.forEach((item) => {
     (item.batches || []).forEach((b) => {
       allBatches.push({ item, batch: b });
     });
   });
 
   // Sort batches by FEFO (First Expiry First Out)
-  allBatches.sort((a, b) => a.batch.daysRemaining - b.batch.daysRemaining);
+  allBatches.sort((a, b) => (a.batch?.daysRemaining || 0) - (b.batch?.daysRemaining || 0));
 
-  const lowStockItems = inventory.filter((i) => i.stockQty <= i.reorderLevel);
+  const lowStockItems = safeInventory.filter((i) => i.stockQty <= i.reorderLevel);
 
-  const filteredItems = inventory.filter((item) => {
+  const filteredItems = safeInventory.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(localSearch.toLowerCase()) ||
                           item.sku.toLowerCase().includes(localSearch.toLowerCase()) ||
                           item.category.toLowerCase().includes(localSearch.toLowerCase());

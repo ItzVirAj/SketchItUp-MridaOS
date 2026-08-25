@@ -1,262 +1,488 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   Branch,
   BusinessType,
-  OperationalAlert,
   InventoryItem,
+  SaleRecord,
   CustomerKhata,
   PurchaseOrder,
   PlantCareTask,
   NurserySensor,
   ComplianceLicense,
   ActivityLog,
-  MortalityRecord,
-  SaleRecord,
   SeasonalInsight,
   NurseryCamera,
+  OperationalAlert,
+  MortalityRecord,
+  UserProfile,
+  UserRole,
 } from '../types';
 import * as db from '../services/supabaseService';
-import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
+import { parseLocation, buildPathUrl, navigateTo } from '../lib/router';
+
+export type ModalType =
+  | 'none'
+  | 'new_sale'
+  | 'create_po'
+  | 'record_khata'
+  | 'plant_care'
+  | 'stock_adjust'
+  | 'quick_view_alerts'
+  | 'live_camera'
+  | 'add_user'
+  | 'edit_user'
+  | 'remove_user';
+
+export type ViewType =
+  | 'command_center'
+  | 'sales_pos'
+  | 'inventory_fefo'
+  | 'khata_ledger'
+  | 'procurement'
+  | 'nursery_care'
+  | 'compliance'
+  | 'intelligence'
+  | 'users_directory'
+  | 'dashboard';
 
 interface AppContextType {
-  currentBranch: Branch | null;
-  setCurrentBranch: (branch: Branch) => void;
+  // Auth state
+  session: Session | null;
+  currentUser: User | null;
+  userProfile: UserProfile | null;
+  isLoadingAuth: boolean;
+  authError: string | null;
+  setAuthError: (err: string | null) => void;
+  signOut: () => Promise<void>;
+
+  // Users Directory (Admin/Owner)
+  usersList: UserProfile[];
+  fetchUsersList: () => Promise<void>;
+  adminAddUser: (email: string, password: string, fullName: string, role: UserRole, branchId?: string) => Promise<{ success: boolean; error?: string }>;
+  adminEditUser: (userId: string, fullName: string, role: UserRole, branchId?: string) => Promise<{ success: boolean; error?: string }>;
+  adminToggleRevoke: (userId: string, currentStatus: string) => Promise<{ success: boolean; error?: string }>;
+  adminRemoveUser: (userId: string) => Promise<{ success: boolean; error?: string }>;
+  selectedUserForEdit: UserProfile | null;
+  setSelectedUserForEdit: (u: UserProfile | null) => void;
+
+  // Domain state
   branches: Branch[];
+  currentBranch: Branch | null;
+  setCurrentBranch: (b: Branch | null) => void;
   businessType: BusinessType;
-  setBusinessType: (type: BusinessType) => void;
-  activeView: string;
-  setActiveView: (view: string) => void;
-  isSidebarExpanded: boolean;
-  setIsSidebarExpanded: (expanded: boolean) => void;
-  
-  // Realtime Data State
-  sales: SaleRecord[];
-  setSales: React.Dispatch<React.SetStateAction<SaleRecord[]>>;
-  alerts: OperationalAlert[];
-  dismissAlert: (id: string) => Promise<void>;
+  setBusinessType: (t: BusinessType) => void;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  dateRange: string;
+  setDateRange: (r: any) => void;
   inventory: InventoryItem[];
-  setInventory: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
+  sales: SaleRecord[];
   khataLedger: CustomerKhata[];
-  setKhataLedger: React.Dispatch<React.SetStateAction<CustomerKhata[]>>;
   purchaseOrders: PurchaseOrder[];
-  setPurchaseOrders: React.Dispatch<React.SetStateAction<PurchaseOrder[]>>;
+  plantCareTasks: PlantCareTask[];
   careTasks: PlantCareTask[];
-  setCareTasks: React.Dispatch<React.SetStateAction<PlantCareTask[]>>;
-  toggleCareTask: (id: string) => Promise<void>;
   sensors: NurserySensor[];
   licenses: ComplianceLicense[];
   activities: ActivityLog[];
-  mortalityRecords: MortalityRecord[];
-  cameras: NurseryCamera[];
   seasonalInsight: SeasonalInsight | null;
-  
-  // Status & Connection
-  isLoading: boolean;
+  cameras: NurseryCamera[];
+  alerts: OperationalAlert[];
+  mortalityRecords: MortalityRecord[];
+
+  // Navigation & Modals
+  activeView: string;
+  setActiveView: (view: string) => void;
+  activeModal: ModalType;
+  setActiveModal: (modal: ModalType) => void;
+  isSearchOpen: boolean;
+  setIsSearchOpen: (open: boolean) => void;
+  isSidebarExpanded: boolean;
+  setIsSidebarExpanded: (expanded: boolean) => void;
+
+  // Supabase Status & Refresh
   isSupabaseConnected: boolean;
-  supabaseErrorMessage: string | null;
+  isLoadingData: boolean;
+  isLoading: boolean;
   refreshData: () => Promise<void>;
-  
-  // Filters & State
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  dateRange: 'today' | '7d' | '30d' | 'season';
-  setDateRange: (range: 'today' | '7d' | '30d' | 'season') => void;
-  
-  // Modals
-  activeModal: 'none' | 'new_sale' | 'create_po' | 'record_khata' | 'plant_care' | 'stock_adjust' | 'quick_view_alerts' | 'live_camera';
-  setActiveModal: (modal: 'none' | 'new_sale' | 'create_po' | 'record_khata' | 'plant_care' | 'stock_adjust' | 'quick_view_alerts' | 'live_camera') => void;
-  selectedAlertItem: OperationalAlert | null;
-  setSelectedAlertItem: (alert: OperationalAlert | null) => void;
-  
-  // Realtime Actions
-  addNewSale: (sale: { customerName: string; customerPhone?: string; isKhata: boolean; items: { name: string; qty: number; price: number; batch: string }[]; total: number; cashPaid: number; khataAmount: number }) => Promise<void>;
-  createPurchaseOrder: (po: { supplierName: string; itemsCount: number; totalAmount: number; paymentTerms: string; notes?: string }) => Promise<void>;
+
+  // Actions / Mutations
+  addNewSale: (saleData: {
+    customerName: string;
+    customerPhone?: string;
+    isKhata: boolean;
+    items: { itemId: string; name: string; qty: number; price: number; batch: string }[];
+    total: number;
+    cashPaid: number;
+    khataAmount: number;
+  }) => Promise<void>;
+
+  createPurchaseOrder: (poData: {
+    supplierName: string;
+    itemsCount: number;
+    totalAmount: number;
+    paymentTerms: string;
+  }) => Promise<void>;
+
   recordKhataPayment: (customerId: string, amount: number, paymentMode: string) => Promise<void>;
+
   addPlantCareTask: (task: Omit<PlantCareTask, 'id' | 'isCompleted'>) => Promise<void>;
+
   adjustStock: (itemId: string, batchNumber: string, varianceQty: number, reason: string) => Promise<void>;
+
+  toggleCareTask: (taskId: string) => Promise<void>;
+
+  dismissAlert: (alertId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [branches, setBranches] = useState<Branch[]>([]);
+  // Auth State
+  const [session, setSession] = useState<Session | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [usersList, setUsersList] = useState<UserProfile[]>([]);
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserProfile | null>(null);
+
+  // App UI State
+  const [activeView, setActiveView] = useState<string>('command_center');
+  const [activeModal, setActiveModal] = useState<ModalType>('none');
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(isSupabaseConfigured);
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+
+  // Domain Filter States
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
   const [businessType, setBusinessType] = useState<BusinessType>('hybrid');
-  const [activeView, setActiveView] = useState<string>('command_center');
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(false);
-  
-  // Live Data States
-  const [sales, setSales] = useState<SaleRecord[]>([]);
-  const [alerts, setAlerts] = useState<OperationalAlert[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [dateRange, setDateRange] = useState<string>('today');
+
+  // Core Domain State
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [sales, setSales] = useState<SaleRecord[]>([]);
   const [khataLedger, setKhataLedger] = useState<CustomerKhata[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
-  const [careTasks, setCareTasks] = useState<PlantCareTask[]>([]);
+  const [plantCareTasks, setPlantCareTasks] = useState<PlantCareTask[]>([]);
   const [sensors, setSensors] = useState<NurserySensor[]>([]);
   const [licenses, setLicenses] = useState<ComplianceLicense[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
-  const [mortalityRecords, setMortalityRecords] = useState<MortalityRecord[]>([]);
-  const [cameras, setCameras] = useState<NurseryCamera[]>([]);
   const [seasonalInsight, setSeasonalInsight] = useState<SeasonalInsight | null>(null);
-  
-  // Connection and Loading State
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(false);
-  const [supabaseErrorMessage, setSupabaseErrorMessage] = useState<string | null>(null);
-  
-  // Filter and Modal States
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [dateRange, setDateRange] = useState<'today' | '7d' | '30d' | 'season'>('today');
-  const [activeModal, setActiveModal] = useState<'none' | 'new_sale' | 'create_po' | 'record_khata' | 'plant_care' | 'stock_adjust' | 'quick_view_alerts' | 'live_camera'>('none');
-  const [selectedAlertItem, setSelectedAlertItem] = useState<OperationalAlert | null>(null);
+  const [cameras, setCameras] = useState<NurseryCamera[]>([]);
+  const [alerts, setAlerts] = useState<OperationalAlert[]>([]);
+  const [mortalityRecords, setMortalityRecords] = useState<MortalityRecord[]>([]);
 
-  // Sync business type when branch changes
-  useEffect(() => {
-    if (currentBranch) {
-      setBusinessType(currentBranch.type);
-    }
-  }, [currentBranch]);
-
-  // Comprehensive Data Fetcher from Supabase
-  const loadAllData = useCallback(async () => {
-    setIsLoading(true);
-    const conn = await checkSupabaseConnection();
-    setIsSupabaseConnected(conn.ok);
-    setSupabaseErrorMessage(conn.ok ? null : (conn.message || 'Connection failed'));
-
-    if (conn.ok) {
-      try {
-        const [
-          fetchedBranches,
-          fetchedInventory,
-          fetchedSales,
-          fetchedKhata,
-          fetchedPO,
-          fetchedTasks,
-          fetchedSensors,
-          fetchedLicenses,
-          fetchedActivities,
-          fetchedMortality,
-          fetchedCameras,
-          fetchedAlerts,
-          fetchedSeason,
-        ] = await Promise.all([
-          db.fetchBranches(),
-          db.fetchInventory(),
-          db.fetchSales(),
-          db.fetchKhataLedger(),
-          db.fetchPurchaseOrders(),
-          db.fetchPlantCareTasks(),
-          db.fetchNurserySensors(),
-          db.fetchComplianceLicenses(),
-          db.fetchActivityLogs(),
-          db.fetchMortalityRecords(),
-          db.fetchNurseryCameras(),
-          db.fetchOperationalAlerts(),
-          db.fetchSeasonalInsights(),
-        ]);
-
-        setBranches(fetchedBranches);
-        if (fetchedBranches.length > 0) {
-          setCurrentBranch((prev) => prev || fetchedBranches[0]);
+  // ----------------------------------------------------------------------------
+  // AUTH LIFECYCLE (Supabase Session & Profile)
+  // ----------------------------------------------------------------------------
+  const loadUserProfile = useCallback(async (user: User) => {
+    try {
+      const profile = await db.fetchUserProfile(user.id);
+      if (profile) {
+        if (profile.status === 'revoked') {
+          await supabase.auth.signOut();
+          setSession(null);
+          setCurrentUser(null);
+          setUserProfile(null);
+          setAuthError('Your account has been revoked by an administrator. Please contact support.');
+          return;
         }
-        setInventory(fetchedInventory);
-        setSales(fetchedSales);
-        setKhataLedger(fetchedKhata);
-        setPurchaseOrders(fetchedPO);
-        setCareTasks(fetchedTasks);
-        setSensors(fetchedSensors);
-        setLicenses(fetchedLicenses);
-        setActivities(fetchedActivities);
-        setMortalityRecords(fetchedMortality);
-        setCameras(fetchedCameras);
-        setAlerts(fetchedAlerts);
-        setSeasonalInsight(fetchedSeason);
-      } catch (err: any) {
-        console.error('Error fetching live data from Supabase:', err);
+        setUserProfile(profile);
+      } else {
+        // Fallback default profile from user metadata
+        const fallbackRole = (user.user_metadata?.role as UserRole) || 'counter_staff';
+        setUserProfile({
+          id: user.id,
+          email: user.email || '',
+          fullName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Staff Member',
+          role: fallbackRole,
+          branchId: user.user_metadata?.branch_id || 'nashik-central',
+          status: 'active',
+          createdAt: user.created_at,
+          lastSignInAt: user.last_sign_in_at,
+        });
       }
+    } catch (err) {
+      console.error('Error in loadUserProfile:', err);
     }
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    loadAllData();
-  }, [loadAllData]);
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setCurrentUser(session?.user ?? null);
+      if (session?.user) {
+        loadUserProfile(session.user).finally(() => setIsLoadingAuth(false));
+      } else {
+        setIsLoadingAuth(false);
+      }
+    });
 
-  // Setup Realtime PostgreSQL Change Listeners
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+      setCurrentUser(session?.user ?? null);
+      if (session?.user) {
+        await loadUserProfile(session.user);
+      } else {
+        setUserProfile(null);
+      }
+      setIsLoadingAuth(false);
+    });
+
+    // Initial clean route and modal check
+    const initialRoute = parseLocation();
+    if (initialRoute.view) {
+      setActiveView(initialRoute.view);
+    }
+    if (initialRoute.modal && initialRoute.modal !== 'none') {
+      setActiveModal(initialRoute.modal);
+    }
+
+    const handleLocationChange = () => {
+      const parsed = parseLocation();
+      setActiveView(parsed.view);
+      setActiveModal(parsed.modal);
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, [loadUserProfile]);
+
+  // Sync activeView to clean URL path
+  const handleSetActiveView = useCallback((view: string) => {
+    setActiveView(view);
+    navigateTo(view, activeModal);
+  }, [activeModal]);
+
+  // Sync activeModal to clean URL path
+  const handleSetActiveModal = useCallback((modal: ModalType) => {
+    setActiveModal(modal);
+    navigateTo(activeView, modal);
+  }, [activeView]);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setCurrentUser(null);
+    setUserProfile(null);
+    setActiveView('command_center');
+    setActiveModal('none');
+  };
+
+  // ----------------------------------------------------------------------------
+  // USERS DIRECTORY MANAGEMENT (Admin & Owner)
+  // ----------------------------------------------------------------------------
+  const fetchUsersList = useCallback(async () => {
+    const list = await db.fetchAllUsers();
+    setUsersList(list || []);
+  }, []);
+
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (userProfile && (userProfile.role === 'admin' || userProfile.role === 'owner')) {
+      fetchUsersList();
+    }
+  }, [userProfile, fetchUsersList]);
 
-    const unsubscribe = db.subscribeToRealtimeChanges((tableName) => {
-      // Refresh relevant data slices in background when database changes occur
-      if (tableName === 'sales') db.fetchSales().then(setSales);
-      if (tableName === 'inventory') db.fetchInventory().then(setInventory);
-      if (tableName === 'khata_ledger') db.fetchKhataLedger().then(setKhataLedger);
-      if (tableName === 'purchase_orders') db.fetchPurchaseOrders().then(setPurchaseOrders);
-      if (tableName === 'plant_care_tasks') db.fetchPlantCareTasks().then(setCareTasks);
-      if (tableName === 'nursery_sensors') db.fetchNurserySensors().then(setSensors);
-      if (tableName === 'activity_logs') db.fetchActivityLogs().then(setActivities);
-      if (tableName === 'operational_alerts') db.fetchOperationalAlerts().then(setAlerts);
-      if (tableName === 'mortality_records') db.fetchMortalityRecords().then(setMortalityRecords);
-      if (tableName === 'branches') db.fetchBranches().then(setBranches);
-      if (tableName === 'compliance_licenses') db.fetchComplianceLicenses().then(setLicenses);
-      if (tableName === 'seasonal_insights') db.fetchSeasonalInsights().then(setSeasonalInsight);
-      if (tableName === 'nursery_cameras') db.fetchNurseryCameras().then(setCameras);
+  const adminAddUser = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: UserRole,
+    branchId?: string
+  ) => {
+    const res = await db.adminCreateUser(email, password, fullName, role, branchId);
+    if (res.success) {
+      await fetchUsersList();
+      await refreshData();
+    }
+    return res;
+  };
+
+  const adminEditUser = async (
+    userId: string,
+    fullName: string,
+    role: UserRole,
+    branchId?: string
+  ) => {
+    const res = await db.adminUpdateUser(userId, fullName, role, branchId);
+    if (res.success) {
+      await fetchUsersList();
+      await refreshData();
+      if (currentUser?.id === userId) {
+        await loadUserProfile(currentUser);
+      }
+    }
+    return res;
+  };
+
+  const adminToggleRevoke = async (userId: string, currentStatus: string) => {
+    let res;
+    if (currentStatus === 'active') {
+      res = await db.adminRevokeUser(userId);
+    } else {
+      res = await db.adminUnrevokeUser(userId);
+    }
+    if (res.success) {
+      await fetchUsersList();
+      await refreshData();
+    }
+    return res;
+  };
+
+  const adminRemoveUser = async (userId: string) => {
+    const res = await db.adminDeleteUser(userId);
+    if (res.success) {
+      await fetchUsersList();
+      await refreshData();
+    }
+    return res;
+  };
+
+  // ----------------------------------------------------------------------------
+  // LOAD ALL APP DATA FROM SUPABASE
+  // ----------------------------------------------------------------------------
+  const refreshData = useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const [
+        branchesData,
+        inventoryData,
+        salesData,
+        khataData,
+        poData,
+        careData,
+        sensorData,
+        licData,
+        actData,
+        seasonalData,
+        camData,
+        alertData,
+        mortData,
+      ] = await Promise.all([
+        db.fetchBranches(),
+        db.fetchInventory(),
+        db.fetchSales(),
+        db.fetchKhataLedger(),
+        db.fetchPurchaseOrders(),
+        db.fetchPlantCareTasks(),
+        db.fetchNurserySensors(),
+        db.fetchComplianceLicenses(),
+        db.fetchActivityLogs(),
+        db.fetchSeasonalInsight(),
+        db.fetchNurseryCameras(),
+        db.fetchOperationalAlerts(),
+        db.fetchMortalityRecords(),
+      ]);
+
+      setBranches(branchesData || []);
+      if (branchesData && branchesData.length > 0 && !currentBranch) {
+        setCurrentBranch(branchesData[0]);
+      }
+      setInventory(inventoryData || []);
+      setSales(salesData || []);
+      setKhataLedger(khataData || []);
+      setPurchaseOrders(poData || []);
+      setPlantCareTasks(careData || []);
+      setSensors(sensorData || []);
+      setLicenses(licData || []);
+      setActivities(actData || []);
+      setSeasonalInsight(seasonalData);
+      setCameras(camData || []);
+      setAlerts(alertData || []);
+      setMortalityRecords(mortData || []);
+      setIsSupabaseConnected(true);
+    } catch (err) {
+      console.error('Error fetching live data from Supabase:', err);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [currentBranch]);
+
+  // Initial Data Fetch on Mount
+  useEffect(() => {
+    if (currentUser) {
+      refreshData();
+    }
+  }, [currentUser, refreshData]);
+
+  // Real-Time Postgres Changes Subscription
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubscribe = db.subscribeToRealtimeChanges((table) => {
+      switch (table) {
+        case 'inventory':
+          db.fetchInventory().then((d) => setInventory(d || []));
+          break;
+        case 'sales':
+          db.fetchSales().then((d) => setSales(d || []));
+          break;
+        case 'khata_ledger':
+          db.fetchKhataLedger().then((d) => setKhataLedger(d || []));
+          break;
+        case 'purchase_orders':
+          db.fetchPurchaseOrders().then((d) => setPurchaseOrders(d || []));
+          break;
+        case 'plant_care_tasks':
+          db.fetchPlantCareTasks().then((d) => setPlantCareTasks(d || []));
+          break;
+        case 'nursery_sensors':
+          db.fetchNurserySensors().then((d) => setSensors(d || []));
+          break;
+        case 'compliance_licenses':
+          db.fetchComplianceLicenses().then((d) => setLicenses(d || []));
+          break;
+        case 'activity_logs':
+          db.fetchActivityLogs().then((d) => setActivities(d || []));
+          break;
+        case 'operational_alerts':
+          db.fetchOperationalAlerts().then((d) => setAlerts(d || []));
+          break;
+        case 'profiles':
+          fetchUsersList();
+          break;
+        default:
+          refreshData();
+          break;
+      }
     });
 
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [currentUser, refreshData, fetchUsersList]);
 
-  const refreshData = async () => {
-    await loadAllData();
-  };
-
-  const dismissAlert = async (id: string) => {
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
-    await db.deleteOperationalAlert(id);
-  };
-
-  const toggleCareTask = async (id: string) => {
-    const task = careTasks.find((t) => t.id === id);
-    if (!task) return;
-    const newStatus = !task.isCompleted;
-
-    setCareTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, isCompleted: newStatus } : t))
-    );
-
-    await db.updatePlantCareTaskStatus(id, newStatus);
-
-    if (newStatus) {
-      const newAct: ActivityLog = {
-        id: 'act-' + Date.now(),
-        action: `Completed Task: ${task.title}`,
-        details: `${task.section} (${task.plantType}) verified & marked done.`,
-        user: 'Current User',
-        time: 'Just now',
-        tag: 'nursery',
-        referenceId: task.id,
-      };
-      setActivities((prev) => [newAct, ...prev]);
-      await db.insertActivityLog(newAct);
-    }
-  };
+  // ----------------------------------------------------------------------------
+  // MUTATIONS (REALTIME ASYNC WITH SUPABASE)
+  // ----------------------------------------------------------------------------
 
   const addNewSale = async (saleData: {
     customerName: string;
     customerPhone?: string;
     isKhata: boolean;
-    items: { name: string; qty: number; price: number; batch: string }[];
+    items: { itemId: string; name: string; qty: number; price: number; batch: string }[];
     total: number;
     cashPaid: number;
     khataAmount: number;
   }) => {
-    const invNumber = `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newSaleRecord: SaleRecord = {
-      id: 'sal-' + Date.now(),
-      invoiceNo: invNumber,
+    const saleId = `sale-${Date.now()}`;
+    const invoiceNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const newSale: SaleRecord = {
+      id: saleId,
+      invoiceNo,
       customerName: saleData.customerName,
       customerPhone: saleData.customerPhone,
       isKhata: saleData.isKhata,
@@ -264,73 +490,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       total: saleData.total,
       cashPaid: saleData.cashPaid,
       khataAmount: saleData.khataAmount,
-      date: new Date().toISOString().split('T')[0],
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      paymentMode: saleData.khataAmount > 0 && saleData.cashPaid > 0 ? 'split' : saleData.khataAmount > 0 ? 'khata' : 'cash',
+      date: 'Today',
+      timestamp: 'Just now',
+      paymentMode: saleData.isKhata ? (saleData.cashPaid > 0 ? 'split' : 'khata') : 'upi',
     };
 
-    // Optimistic state updates
-    setSales((prev) => [newSaleRecord, ...prev]);
+    setSales((prev) => [newSale, ...prev]);
 
-    const newAct: ActivityLog = {
-      id: 'act-' + Date.now(),
-      action: `Counter Sale #${invNumber} Completed`,
-      details: `₹${saleData.total.toLocaleString('en-IN')} billed to ${saleData.customerName} (${saleData.isKhata ? `Khata ₹${saleData.khataAmount.toLocaleString('en-IN')}` : 'Cash/UPI'}).`,
-      user: 'Counter POS',
-      time: 'Just now',
-      tag: 'sale',
-      referenceId: invNumber,
-    };
-    setActivities((prev) => [newAct, ...prev]);
+    // Deduct stock from inventory
+    for (const line of saleData.items) {
+      const currentItem = inventory.find((i) => i.id === line.itemId);
+      if (currentItem) {
+        const newQty = Math.max(0, currentItem.stockQty - line.qty);
+        await db.updateInventoryItem(currentItem.id, { stockQty: newQty });
+      }
+    }
 
-    // Save sale and activity log to Supabase
-    await Promise.all([
-      db.insertSaleRecord(newSaleRecord),
-      db.insertActivityLog(newAct),
-    ]);
-
-    // If Khata credit involved, update Customer Khata Ledger
-    if (saleData.khataAmount > 0) {
-      const existing = khataLedger.find((k) => k.name.toLowerCase().includes(saleData.customerName.toLowerCase()));
+    // If Khata credit, update or insert customer ledger
+    if (saleData.isKhata && saleData.khataAmount > 0) {
+      const existing = khataLedger.find(
+        (k) => k.name.toLowerCase() === saleData.customerName.toLowerCase()
+      );
       if (existing) {
-        const updatedKhata: CustomerKhata = {
-          ...existing,
-          outstandingBalance: existing.outstandingBalance + saleData.khataAmount,
-          totalPurchased: existing.totalPurchased + saleData.total,
-          lastPaymentDate: new Date().toISOString().split('T')[0],
-        };
-        setKhataLedger((prev) => prev.map((k) => (k.id === existing.id ? updatedKhata : k)));
-        await db.upsertKhataRecord(updatedKhata);
+        const newBalance = existing.outstandingBalance + saleData.khataAmount;
+        const newTotal = existing.totalPurchased + saleData.total;
+        await db.updateKhataCustomer(existing.id, {
+          outstandingBalance: newBalance,
+          totalPurchased: newTotal,
+        });
       } else {
-        const newKhata: CustomerKhata = {
-          id: 'kht-' + Date.now(),
+        const newCust: CustomerKhata = {
+          id: `khata-${Date.now()}`,
           name: saleData.customerName,
-          phone: saleData.customerPhone || '+91 98000 00000',
-          village: 'Agri Zone',
+          phone: saleData.customerPhone || '+91 98XXX XXXXX',
+          village: 'Nashik Cluster',
           totalPurchased: saleData.total,
           outstandingBalance: saleData.khataAmount,
           creditLimit: 50000,
-          daysOverdue: 1,
-          lastPaymentDate: new Date().toISOString().split('T')[0],
+          daysOverdue: 0,
+          lastPaymentDate: 'N/A',
           status: 'healthy',
           ageing: 'current',
         };
-        setKhataLedger((prev) => [newKhata, ...prev]);
-        await db.upsertKhataRecord(newKhata);
+        await db.insertKhataCustomer(newCust);
       }
     }
 
-    // Deduct stock quantities in inventory
-    for (const item of saleData.items) {
-      const found = inventory.find((i) => i.name === item.name);
-      if (found) {
-        const newQty = Math.max(0, found.stockQty - item.qty);
-        setInventory((prev) =>
-          prev.map((inv) => (inv.id === found.id ? { ...inv, stockQty: newQty } : inv))
-        );
-        await db.updateInventoryItem(found.id, { stockQty: newQty });
-      }
-    }
+    // Insert sale and activity record
+    await db.insertSale(newSale);
+    await db.insertActivityLog({
+      action: 'POS Counter Sale Completed',
+      details: `Generated Invoice #${invoiceNo} for ${saleData.customerName} (₹${saleData.total.toLocaleString('en-IN')})`,
+      user: userProfile?.fullName || 'Staff',
+      time: 'Just now',
+      tag: 'sale',
+      referenceId: invoiceNo,
+    });
   };
 
   const createPurchaseOrder = async (poData: {
@@ -338,12 +553,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     itemsCount: number;
     totalAmount: number;
     paymentTerms: string;
-    notes?: string;
   }) => {
-    const poNum = `PO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const poNumber = `PO-2026-${Math.floor(100 + Math.random() * 900)}`;
     const newPO: PurchaseOrder = {
-      id: 'po-' + Date.now(),
-      poNumber: poNum,
+      id: `po-${Date.now()}`,
+      poNumber,
       supplierName: poData.supplierName,
       itemsCount: poData.itemsCount,
       totalAmount: poData.totalAmount,
@@ -351,160 +565,187 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       expectedDelivery: 'In 3 Days',
       status: 'pending_acknowledgement',
       paymentTerms: poData.paymentTerms,
-      notes: poData.notes,
     };
 
     setPurchaseOrders((prev) => [newPO, ...prev]);
-
-    const newAct: ActivityLog = {
-      id: 'act-' + Date.now(),
-      action: `Purchase Order #${poNum} Issued`,
-      details: `₹${poData.totalAmount.toLocaleString('en-IN')} ordered from ${poData.supplierName} (${poData.itemsCount} items).`,
-      user: 'Procurement',
+    await db.insertPurchaseOrder(newPO);
+    await db.insertActivityLog({
+      action: 'Supplier PO Issued',
+      details: `Dispatched ${poNumber} to ${poData.supplierName} (₹${poData.totalAmount.toLocaleString('en-IN')})`,
+      user: userProfile?.fullName || 'Procurement',
       time: 'Just now',
       tag: 'procurement',
-      referenceId: poNum,
-    };
-    setActivities((prev) => [newAct, ...prev]);
-
-    await Promise.all([
-      db.insertPurchaseOrder(newPO),
-      db.insertActivityLog(newAct),
-    ]);
+      referenceId: poNumber,
+    });
   };
 
   const recordKhataPayment = async (customerId: string, amount: number, paymentMode: string) => {
-    const customer = khataLedger.find((c) => c.id === customerId);
-    if (!customer) return;
+    const cust = khataLedger.find((k) => k.id === customerId);
+    if (!cust) return;
 
-    const newBalance = Math.max(0, customer.outstandingBalance - amount);
-    const newStatus = newBalance === 0 ? 'healthy' : customer.status;
-    const updatedCustomer: CustomerKhata = {
-      ...customer,
-      outstandingBalance: newBalance,
-      lastPaymentDate: new Date().toISOString().split('T')[0],
-      status: newStatus,
-    };
+    const newBalance = Math.max(0, cust.outstandingBalance - amount);
+    const newStatus = newBalance === 0 ? 'healthy' : cust.status;
 
     setKhataLedger((prev) =>
-      prev.map((c) => (c.id === customerId ? updatedCustomer : c))
+      prev.map((k) =>
+        k.id === customerId
+          ? {
+              ...k,
+              outstandingBalance: newBalance,
+              status: newStatus,
+              lastPaymentDate: 'Today',
+            }
+          : k
+      )
     );
 
-    const newAct: ActivityLog = {
-      id: 'act-' + Date.now(),
-      action: `Khata Payment Recorded ₹${amount.toLocaleString('en-IN')}`,
-      details: `Collected from ${customer.name} via ${paymentMode}. Settlement logged.`,
-      user: 'Accounts',
+    await db.updateKhataCustomer(customerId, {
+      outstandingBalance: newBalance,
+      status: newStatus,
+      lastPaymentDate: new Date().toISOString().split('T')[0],
+    });
+
+    const receiptNo = `REC-${Math.floor(1000 + Math.random() * 9000)}`;
+    await db.insertActivityLog({
+      action: 'Khata Payment Settle',
+      details: `Received ₹${amount.toLocaleString('en-IN')} from ${cust.name} via ${paymentMode}`,
+      user: userProfile?.fullName || 'Cashier',
       time: 'Just now',
       tag: 'khata',
-    };
-    setActivities((prev) => [newAct, ...prev]);
-
-    await Promise.all([
-      db.upsertKhataRecord(updatedCustomer),
-      db.insertActivityLog(newAct),
-    ]);
+      referenceId: receiptNo,
+    });
   };
 
-  const addPlantCareTask = async (taskData: Omit<PlantCareTask, 'id' | 'isCompleted'>) => {
+  const addPlantCareTask = async (task: Omit<PlantCareTask, 'id' | 'isCompleted'>) => {
     const newTask: PlantCareTask = {
-      id: 'tsk-' + Date.now(),
-      ...taskData,
+      id: `task-${Date.now()}`,
+      ...task,
       isCompleted: false,
     };
-    setCareTasks((prev) => [newTask, ...prev]);
 
-    const newAct: ActivityLog = {
-      id: 'act-' + Date.now(),
-      action: `Care Task Scheduled: ${taskData.title}`,
-      details: `${taskData.section} scheduled for ${taskData.timeSlot}.`,
-      user: 'Nursery Tech',
+    setPlantCareTasks((prev) => [...prev, newTask]);
+    await db.insertPlantCareTask(newTask);
+    await db.insertActivityLog({
+      action: 'Plant Care Scheduled',
+      details: `${task.title} for ${task.plantType} in ${task.section}`,
+      user: userProfile?.fullName || 'Staff',
       time: 'Just now',
       tag: 'nursery',
-    };
-    setActivities((prev) => [newAct, ...prev]);
-
-    await Promise.all([
-      db.insertPlantCareTask(newTask),
-      db.insertActivityLog(newAct),
-    ]);
+    });
   };
 
-  const adjustStock = async (itemId: string, batchNumber: string, varianceQty: number, reason: string) => {
+  const adjustStock = async (
+    itemId: string,
+    batchNumber: string,
+    varianceQty: number,
+    reason: string
+  ) => {
     const item = inventory.find((i) => i.id === itemId);
     if (!item) return;
 
-    const newQty = Math.max(0, item.stockQty + varianceQty);
-    const updatedItem = { ...item, stockQty: newQty };
-
-    setInventory((prev) =>
-      prev.map((i) => (i.id === itemId ? updatedItem : i))
+    const newStock = Math.max(0, item.stockQty + varianceQty);
+    const updatedBatches = item.batches.map((b) =>
+      b.batchNumber === batchNumber
+        ? { ...b, quantity: Math.max(0, b.quantity + varianceQty) }
+        : b
     );
 
-    const newAct: ActivityLog = {
-      id: 'act-' + Date.now(),
-      action: `Stock Adjustment (${varianceQty > 0 ? '+' : ''}${varianceQty})`,
-      details: `${item.name} (Batch ${batchNumber}) adjusted. Reason: ${reason}.`,
-      user: 'Warehouse',
+    setInventory((prev) =>
+      prev.map((i) =>
+        i.id === itemId ? { ...i, stockQty: newStock, batches: updatedBatches } : i
+      )
+    );
+
+    await db.updateInventoryItem(itemId, {
+      stockQty: newStock,
+      batches: updatedBatches,
+    });
+
+    await db.insertActivityLog({
+      action: 'Stock Audit Variance Write-Down',
+      details: `${varianceQty > 0 ? '+' : ''}${varianceQty} ${item.unit} (${item.name} Lot ${batchNumber}) — ${reason}`,
+      user: userProfile?.fullName || 'Manager',
       time: 'Just now',
       tag: 'inventory',
-    };
-    setActivities((prev) => [newAct, ...prev]);
+    });
+  };
 
-    await Promise.all([
-      db.updateInventoryItem(itemId, { stockQty: newQty }),
-      db.insertActivityLog(newAct),
-    ]);
+  const toggleCareTask = async (taskId: string) => {
+    const current = plantCareTasks.find((t) => t.id === taskId);
+    if (!current) return;
+
+    const updatedStatus = !current.isCompleted;
+    setPlantCareTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, isCompleted: updatedStatus } : t))
+    );
+
+    await db.updatePlantCareTask(taskId, { isCompleted: updatedStatus });
+  };
+
+  const dismissAlert = async (alertId: string) => {
+    setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    await db.deleteOperationalAlert(alertId);
   };
 
   return (
     <AppContext.Provider
       value={{
+        session,
+        currentUser,
+        userProfile,
+        isLoadingAuth,
+        authError,
+        setAuthError,
+        signOut,
+        usersList,
+        fetchUsersList,
+        adminAddUser,
+        adminEditUser,
+        adminToggleRevoke,
+        adminRemoveUser,
+        selectedUserForEdit,
+        setSelectedUserForEdit,
+        branches,
         currentBranch,
         setCurrentBranch,
-        branches,
         businessType,
         setBusinessType,
-        activeView,
-        setActiveView,
-        isSidebarExpanded,
-        setIsSidebarExpanded,
-        sales,
-        setSales,
-        alerts,
-        dismissAlert,
-        inventory,
-        setInventory,
-        khataLedger,
-        setKhataLedger,
-        purchaseOrders,
-        setPurchaseOrders,
-        careTasks,
-        setCareTasks,
-        toggleCareTask,
-        sensors,
-        licenses,
-        activities,
-        mortalityRecords,
-        cameras,
-        seasonalInsight,
-        isLoading,
-        isSupabaseConnected,
-        supabaseErrorMessage,
-        refreshData,
         searchQuery,
         setSearchQuery,
         dateRange,
         setDateRange,
+        inventory,
+        sales,
+        khataLedger,
+        purchaseOrders,
+        plantCareTasks,
+        careTasks: plantCareTasks,
+        sensors,
+        licenses,
+        activities,
+        seasonalInsight,
+        cameras,
+        alerts,
+        mortalityRecords,
+        activeView,
+        setActiveView: handleSetActiveView,
         activeModal,
-        setActiveModal,
-        selectedAlertItem,
-        setSelectedAlertItem,
+        setActiveModal: handleSetActiveModal,
+        isSearchOpen,
+        setIsSearchOpen,
+        isSidebarExpanded,
+        setIsSidebarExpanded,
+        isSupabaseConnected,
+        isLoadingData,
+        isLoading: isLoadingData,
+        refreshData,
         addNewSale,
         createPurchaseOrder,
         recordKhataPayment,
         addPlantCareTask,
         adjustStock,
+        toggleCareTask,
+        dismissAlert,
       }}
     >
       {children}

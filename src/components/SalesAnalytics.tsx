@@ -15,16 +15,28 @@ import {
 } from 'lucide-react';
 
 export const SalesAnalytics: React.FC = () => {
-  const { sales, khataLedger, inventory, sensors, alerts, setActiveView } = useApp();
+  const {
+    sales = [],
+    khataLedger = [],
+    inventory = [],
+    sensors = [],
+    alerts = [],
+    setActiveView,
+  } = useApp();
   const [chartMode, setChartMode] = useState<'sales_cash_khata' | 'category_breakdown' | 'nursery_health'>('sales_cash_khata');
 
-  const totalSalesAmount = sales.reduce((sum, s) => sum + s.total, 0);
-  const totalCashAmount = sales.reduce((sum, s) => sum + s.cashPaid, 0);
-  const totalKhataAmount = sales.reduce((sum, s) => sum + s.khataAmount, 0);
+  const safeSales = sales || [];
+  const safeInventory = inventory || [];
+  const safeSensors = sensors || [];
+  const safeAlerts = alerts || [];
+
+  const totalSalesAmount = safeSales.reduce((sum, s) => sum + s.total, 0);
+  const totalCashAmount = safeSales.reduce((sum, s) => sum + s.cashPaid, 0);
+  const totalKhataAmount = safeSales.reduce((sum, s) => sum + s.khataAmount, 0);
   const cashRealizationPct = totalSalesAmount > 0
     ? Math.round((totalCashAmount / totalSalesAmount) * 1000) / 10
     : 100;
-  const avgTicketSize = sales.length > 0 ? Math.round(totalSalesAmount / sales.length) : 0;
+  const avgTicketSize = safeSales.length > 0 ? Math.round(totalSalesAmount / safeSales.length) : 0;
   const khataLockinPct = totalSalesAmount > 0
     ? Math.round((totalKhataAmount / totalSalesAmount) * 1000) / 10
     : 0;
@@ -33,7 +45,7 @@ export const SalesAnalytics: React.FC = () => {
   const estimatedDailyMargin = Math.round(totalSalesAmount * 0.172);
 
   // Anomalies count
-  const anomalyCount = alerts.filter((a) => a.category === 'inventory' || a.category === 'compliance').length;
+  const anomalyCount = safeAlerts.filter((a) => a.category === 'inventory' || a.category === 'compliance').length;
 
   // Realtime Computed Sales Trends (Derived from live sales array)
   const computedSalesTrends = useMemo(() => {

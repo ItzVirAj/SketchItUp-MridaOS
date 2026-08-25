@@ -22,6 +22,11 @@ out/
 .agents/
 graphify-out/
 
+# Supabase CLI Local Cache
+supabase/.temp/
+.temp/
+supabase/.branches/
+
 # Python artifacts & virtual environments
 __pycache__/
 *.py[cod]
@@ -80,3 +85,4 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+

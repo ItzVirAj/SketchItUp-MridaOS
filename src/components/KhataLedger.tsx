@@ -11,15 +11,16 @@ import {
 import { CustomerKhata } from '../types';
 
 export const KhataLedger: React.FC = () => {
-  const { khataLedger, setActiveModal, setActiveView } = useApp();
+  const { khataLedger = [], setActiveModal, setActiveView } = useApp();
+  const safeKhata = khataLedger || [];
   const [selectedAgeingFilter, setSelectedAgeingFilter] = useState<string>('all');
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
 
-  const totalOutstanding = khataLedger.reduce((sum, k) => sum + k.outstandingBalance, 0);
-  const totalOverdue = khataLedger
+  const totalOutstanding = safeKhata.reduce((sum, k) => sum + k.outstandingBalance, 0);
+  const totalOverdue = safeKhata
     .filter((k) => k.daysOverdue > 60)
     .reduce((sum, k) => sum + k.outstandingBalance, 0);
-  const dueSoon = khataLedger
+  const dueSoon = safeKhata
     .filter((k) => k.daysOverdue > 0 && k.daysOverdue <= 30)
     .reduce((sum, k) => sum + k.outstandingBalance, 0);
 
@@ -33,7 +34,7 @@ export const KhataLedger: React.FC = () => {
   ];
 
   const ageingBuckets = bucketDefs.map((b) => {
-    const matching = khataLedger.filter((k) => k.ageing === b.key);
+    const matching = safeKhata.filter((k) => k.ageing === b.key);
     const amount = matching.reduce((sum, k) => sum + k.outstandingBalance, 0);
     const percent = totalOutstanding > 0 ? Math.round((amount / totalOutstanding) * 100) : 0;
     return { ...b, amount, percent, count: matching.length };

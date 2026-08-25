@@ -14,19 +14,26 @@ import {
 
 export const MetricCards: React.FC = () => {
   const {
-    sales,
-    khataLedger,
-    inventory,
-    purchaseOrders,
-    careTasks,
-    mortalityRecords,
+    sales = [],
+    khataLedger = [],
+    inventory = [],
+    purchaseOrders = [],
+    careTasks = [],
+    mortalityRecords = [],
     setActiveView,
     setActiveModal,
   } = useApp();
 
+  const safeSales = sales || [];
+  const safeKhata = khataLedger || [];
+  const safeInventory = inventory || [];
+  const safePOs = purchaseOrders || [];
+  const safeCareTasks = careTasks || [];
+  const safeMortality = mortalityRecords || [];
+
   // 1. Sales Calculations
   const todayDateStr = new Date().toISOString().split('T')[0];
-  const todaySalesList = sales.filter((s) => s.date === todayDateStr || !s.date);
+  const todaySalesList = safeSales.filter((s) => s.date === todayDateStr || !s.date);
   const todayGross = todaySalesList.reduce((sum, s) => sum + s.total, 0);
   const todayCash = todaySalesList.reduce((sum, s) => sum + s.cashPaid, 0);
   const todayKhata = todaySalesList.reduce((sum, s) => sum + s.khataAmount, 0);
@@ -35,21 +42,21 @@ export const MetricCards: React.FC = () => {
   const khataPct = 100 - cashPct;
 
   // 2. Khata Calculations
-  const totalOutstanding = khataLedger.reduce((sum, k) => sum + k.outstandingBalance, 0);
-  const totalOverdue = khataLedger.filter((k) => k.daysOverdue > 60).reduce((sum, k) => sum + k.outstandingBalance, 0);
-  const overdueAccountsCount = khataLedger.filter((k) => k.daysOverdue > 60).length;
-  const totalPurchasedAll = khataLedger.reduce((sum, k) => sum + k.totalPurchased, 0);
+  const totalOutstanding = safeKhata.reduce((sum, k) => sum + k.outstandingBalance, 0);
+  const totalOverdue = safeKhata.filter((k) => k.daysOverdue > 60).reduce((sum, k) => sum + k.outstandingBalance, 0);
+  const overdueAccountsCount = safeKhata.filter((k) => k.daysOverdue > 60).length;
+  const totalPurchasedAll = safeKhata.reduce((sum, k) => sum + k.totalPurchased, 0);
   const recoveryRate = totalPurchasedAll > 0
     ? Math.max(0, Math.min(100, Math.round(((totalPurchasedAll - totalOutstanding) / totalPurchasedAll) * 100)))
     : 100;
 
   // 3. Inventory Calculations
-  const totalInventoryValue = inventory.reduce((sum, item) => sum + item.stockQty * item.costPrice, 0);
-  const lowStockCount = inventory.filter((i) => i.stockQty <= i.reorderLevel).length;
+  const totalInventoryValue = safeInventory.reduce((sum, item) => sum + item.stockQty * item.costPrice, 0);
+  const lowStockCount = safeInventory.filter((i) => i.stockQty <= i.reorderLevel).length;
   let expiringBatchesCount = 0;
   let totalBatchesCount = 0;
   let expiredBatchesCount = 0;
-  inventory.forEach((item) => {
+  safeInventory.forEach((item) => {
     (item.batches || []).forEach((b) => {
       totalBatchesCount++;
       if (b.daysRemaining <= 30) expiringBatchesCount++;
@@ -61,17 +68,17 @@ export const MetricCards: React.FC = () => {
     : 100;
 
   // 4. Procurement Calculations
-  const activePOs = purchaseOrders.filter((po) => po.status !== 'received');
+  const activePOs = safePOs.filter((po) => po.status !== 'received');
   const totalOpenPOAmount = activePOs.reduce((sum, po) => sum + po.totalAmount, 0);
-  const pendingAckCount = purchaseOrders.filter((po) => po.status === 'pending_acknowledgement').length;
-  const inTransitCount = purchaseOrders.filter((po) => po.status === 'dispatched').length;
+  const pendingAckCount = safePOs.filter((po) => po.status === 'pending_acknowledgement').length;
+  const inTransitCount = safePOs.filter((po) => po.status === 'dispatched').length;
 
   // 5. Nursery Calculations
-  const totalTasks = careTasks.length;
-  const completedTasks = careTasks.filter((t) => t.isCompleted).length;
+  const totalTasks = safeCareTasks.length;
+  const completedTasks = safeCareTasks.filter((t) => t.isCompleted).length;
   const taskPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 100;
-  const pendingCareTasks = careTasks.filter((t) => !t.isCompleted);
-  const totalMortalityLoss = mortalityRecords.reduce((sum, m) => sum + m.quantityLost, 0);
+  const pendingCareTasks = safeCareTasks.filter((t) => !t.isCompleted);
+  const totalMortalityLoss = safeMortality.reduce((sum, m) => sum + m.quantityLost, 0);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
