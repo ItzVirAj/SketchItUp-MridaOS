@@ -1,8 +1,119 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: light;
+  /* Light Mode Palette */
+  --color-primary-green: #079455;
+  --color-primary-green-hover: #067647;
+  --color-accent-teal: #079455;
+  --color-accent-gold: #F9AD19;
+  --color-accent-gold-hover: #E0980B;
+  
+  --color-bg-primary: #F4EDDE;
+  --color-bg-secondary: #F6F8F6;
+  --color-bg-tertiary: #EFF5F1;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-elevated: #FFFFFF;
+
+  --color-border: #E0EAE4;
+  --color-border-subtle: #CCD8D1;
+  --color-border-focus: #079455;
+  --color-divider: #E0EAE4;
+
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #54645B;
+  --color-text-muted: #7A8B82;
+  --color-text-disabled: #98A2B3;
+
+  --color-success: #079455;
+  --color-success-bg: #ECFDF3;
+  --color-warning: #F9AD19;
+  --color-warning-bg: #FEF6EE;
+  --color-error: #D92D20;
+  --color-error-bg: #FEF3F2;
+  --color-info: #0BA5EC;
+  --color-info-bg: #F0F9FF;
+
+  --color-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --color-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+  --color-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --color-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.12);
+
+  --chart-1: #079455;
+  --chart-2: #F9AD19;
+  --chart-3: #2E9055;
+  --chart-4: #35C56E;
+  --chart-5: #E0980B;
+}
+
+html.dark, .dark {
+  color-scheme: dark;
+  /* Dark Mode Palette (Agriculture-Themed) */
+  --dark-primary-green: #2E9055;
+  --dark-primary-green-hover: #35C56E;
+  --dark-accent-teal: #0A6B4A;
+  --dark-accent-teal-hover: #079455;
+
+  --dark-bg-primary: #1A1F1A;
+  --dark-bg-secondary: #242924;
+  --dark-bg-tertiary: #2D332D;
+  --dark-bg-elevated: #353D35;
+
+  --dark-surface: #242924;
+  --dark-border: #3D453D;
+  --dark-border-focus: #079455;
+  --dark-divider: #4A524A;
+
+  --dark-text-primary: #E8F0E8;
+  --dark-text-secondary: #B8C5B8;
+  --dark-text-muted: #8A9A8A;
+  --dark-text-disabled: #5A6A5A;
+
+  --dark-success: #4CAF50;
+  --dark-success-bg: #1B3A1D;
+  --dark-warning: #FFC107;
+  --dark-warning-bg: #3A2F0D;
+  --dark-error: #EF5350;
+  --dark-error-bg: #3A1B1A;
+  --dark-info: #29B6F6;
+  --dark-info-bg: #0D2A3A;
+
+  --dark-accent-gold: #F9AD19;
+  --dark-accent-gold-hover: #FFBF3D;
+
+  --dark-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --dark-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
+  --dark-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+  --dark-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
+
+  --dark-chart-1: #4CAF50;
+  --dark-chart-2: #F9AD19;
+  --dark-chart-3: #079455;
+  --dark-chart-4: #66BB6A;
+  --dark-chart-5: #FFC107;
+
+  /* Theme variables alias */
+  --color-bg-primary: #1A1F1A;
+  --color-bg-secondary: #242924;
+  --color-bg-tertiary: #2D332D;
+  --color-bg-surface: #242924;
+  --color-bg-elevated: #353D35;
+  --color-border: #3D453D;
+  --color-border-subtle: #303730;
+  --color-text-primary: #E8F0E8;
+  --color-text-secondary: #B8C5B8;
+  --color-text-muted: #8A9A8A;
+  --color-text-disabled: #5A6A5A;
+  --color-divider: #4A524A;
+}
+
 @layer base {
   * {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  body {
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 }
 
@@ -46,6 +157,153 @@ html.lenis, html.lenis body {
   background: #A0B5AA;
 }
 
+/* Agriculture Dark Mode Global UI Overrides */
+html.dark {
+  background-color: #1A1F1A;
+  color: #E8F0E8;
+}
+
+html.dark body {
+  background-color: #1A1F1A;
+  color: #E8F0E8;
+}
+
+/* Background mappings */
+html.dark .bg-white {
+  background-color: #242924 !important;
+}
+
+html.dark .bg-\[\#F6F8F6\],
+html.dark .bg-\[\#F9FBFA\],
+html.dark .bg-\[\#F9FBF9\],
+html.dark .bg-\[\#F4EDDE\] {
+  background-color: #1A1F1A !important;
+}
+
+html.dark .bg-\[\#EFF5F1\],
+html.dark .bg-\[\#E0EAE4\] {
+  background-color: #2D332D !important;
+}
+
+html.dark .bg-\[\#F2F5F3\] {
+  background-color: #2D332D !important;
+}
+
+/* Border mappings */
+html.dark .border-\[\#E2EAE5\],
+html.dark .border-\[\#E0EAE4\],
+html.dark .border-\[\#CCD8D1\],
+html.dark .border-\[\#DCE4DF\],
+html.dark .border-\[\#C5D7CC\],
+html.dark .border-\[\#B7D5C4\],
+html.dark .border-gray-200,
+html.dark .border-gray-100 {
+  border-color: #3D453D !important;
+}
+
+/* Text mappings */
+html.dark .text-\[\#1A1A1A\],
+html.dark .text-black,
+html.dark .text-gray-900 {
+  color: #E8F0E8 !important;
+}
+
+html.dark .text-\[\#344054\],
+html.dark .text-\[\#54645B\],
+html.dark .text-\[\#5E6D65\],
+html.dark .text-\[\#6E7B74\],
+html.dark .text-gray-700,
+html.dark .text-gray-600 {
+  color: #B8C5B8 !important;
+}
+
+html.dark .text-\[\#7A8B82\],
+html.dark .text-\[\#788880\],
+html.dark .text-\[\#8E9B94\],
+html.dark .text-\[\#98A2B3\],
+html.dark .text-gray-500,
+html.dark .text-gray-400 {
+  color: #8A9A8A !important;
+}
+
+/* Form inputs, textareas, selects */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #2D332D !important;
+  color: #E8F0E8 !important;
+  border-color: #3D453D !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #8A9A8A !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #079455 !important;
+  box-shadow: 0 0 0 2px rgba(7, 148, 85, 0.3) !important;
+}
+
+/* Semantic Badges in Dark Mode */
+html.dark .bg-\[\#ECFDF3\] {
+  background-color: #1B3A1D !important;
+  color: #4CAF50 !important;
+}
+html.dark .border-\[\#ABEFC6\] {
+  border-color: #2E5C32 !important;
+}
+html.dark .text-\[\#067647\],
+html.dark .text-\[\#079455\] {
+  color: #4CAF50 !important;
+}
+
+html.dark .bg-\[\#FEF6EE\] {
+  background-color: #3A2F0D !important;
+  color: #FFC107 !important;
+}
+html.dark .border-\[\#F9DBAF\] {
+  border-color: #5C4B18 !important;
+}
+html.dark .text-\[\#B54708\],
+html.dark .text-\[\#93370D\] {
+  color: #FFC107 !important;
+}
+
+html.dark .bg-\[\#FEF3F2\] {
+  background-color: #3A1B1A !important;
+  color: #EF5350 !important;
+}
+html.dark .border-\[\#FECDCA\],
+html.dark .border-\[\#FDA29B\] {
+  border-color: #5C2B2A !important;
+}
+html.dark .text-\[\#D92D20\],
+html.dark .text-\[\#B42318\],
+html.dark .text-\[\#912018\] {
+  color: #EF5350 !important;
+}
+
+html.dark .bg-\[\#F0F9FF\] {
+  background-color: #0D2A3A !important;
+  color: #29B6F6 !important;
+}
+
+/* Table rows hover */
+html.dark tr:hover {
+  background-color: rgba(53, 61, 53, 0.4) !important;
+}
+
+/* Dark mode scrollbars */
+html.dark ::-webkit-scrollbar-thumb {
+  background: #3D453D;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4A524A;
+}
+
 /* Glass & Soft shadows matching the reference images */
 .card-shadow {
   box-shadow: 0 4px 20px -2px rgba(16, 37, 24, 0.04), 0 2px 6px -1px rgba(16, 37, 24, 0.02);
@@ -53,4 +311,20 @@ html.lenis, html.lenis body {
 
 .green-card-shadow {
   box-shadow: 0 10px 25px -3px rgba(7, 148, 85, 0.25), 0 4px 10px -2px rgba(7, 148, 85, 0.15);
+}
+
+/* Dark Card Shadows */
+html.dark .card-shadow {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.6), 0 2px 6px -1px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.dark .green-card-shadow {
+  box-shadow: 0 10px 25px -3px rgba(46, 144, 85, 0.35), 0 4px 10px -2px rgba(46, 144, 85, 0.2) !important;
+}
+
+/* Modal Backdrops & Elevated Panels */
+html.dark .backdrop-blur-xs,
+html.dark .backdrop-blur-sm,
+html.dark .backdrop-blur-md {
+  background-color: rgba(10, 15, 10, 0.75) !important;
 }

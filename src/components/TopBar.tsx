@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { ThemeToggle } from './ThemeToggle';
 import {
   Bell,
   ArrowUpRight,
@@ -114,6 +115,9 @@ export const TopBar: React.FC = () => {
             <span>{alerts.length} Alerts</span>
             <ArrowUpRight className="w-3.5 h-3.5 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </button>
+
+          {/* Theme Toggle (Agriculture Dark/Light Mode) */}
+          <ThemeToggle />
 
           {/* Authenticated User Identity Pill */}
           <div

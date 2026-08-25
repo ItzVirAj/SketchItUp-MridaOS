@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { ThemeToggle } from './ThemeToggle';
 import {
   LayoutDashboard,
   Receipt,

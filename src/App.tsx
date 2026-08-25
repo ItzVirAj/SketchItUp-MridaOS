@@ -94,7 +94,7 @@ const MainLayout: React.FC = () => {
   const isCommandCenter = activeView === 'command_center' || activeView === 'dashboard' || !activeView;
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#F6F8F6] text-[#1A1A1A] font-sans antialiased selection:bg-[#079455]/20 selection:text-[#079455]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#F6F8F6] dark:bg-[#1A1F1A] text-[#1A1A1A] dark:text-[#E8F0E8] font-sans antialiased selection:bg-[#079455]/20 selection:text-[#079455] transition-colors duration-200">
       {/* Top Header Bar */}
       <TopBar />
 

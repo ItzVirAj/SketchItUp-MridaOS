@@ -63,6 +63,11 @@ interface AppContextType {
   sessionExpiresAt: string | null;
   signOut: () => Promise<void>;
 
+  // Theme state (Dark/Light mode)
+  theme: 'light' | 'dark';
+  setTheme: (theme: 'light' | 'dark') => void;
+  toggleTheme: () => void;
+
   // Users Directory (Admin/Owner)
   usersList: UserProfile[];
   fetchUsersList: () => Promise<void>;
@@ -159,6 +164,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserProfile | null>(null);
 
   // App UI State
+  const [theme, setThemeState] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('mridaos_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  const setTheme = (newTheme: 'light' | 'dark') => {
+    setThemeState(newTheme);
+    try {
+      localStorage.setItem('mridaos_theme', newTheme);
+      if (newTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch {}
+  };
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  };
+
+  useEffect(() => {
+    try {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch {}
+  }, [theme]);
+
   const [activeView, setActiveView] = useState<string>('command_center');
   const [activeModal, setActiveModal] = useState<ModalType>('none');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
@@ -872,6 +913,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithJwt,
         sessionExpiresAt,
         signOut,
+        theme,
+        setTheme,
+        toggleTheme,
         usersList,
         fetchUsersList,
         adminAddUser,
