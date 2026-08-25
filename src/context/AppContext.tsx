@@ -510,6 +510,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [userProfile, fetchUsersList]);
 
+  // Listen for custom realtime user events across window/tabs
+  useEffect(() => {
+    const handleUsersChange = () => {
+      fetchUsersList();
+    };
+
+    window.addEventListener('mridaos_users_changed', handleUsersChange);
+    return () => {
+      window.removeEventListener('mridaos_users_changed', handleUsersChange);
+    };
+  }, [fetchUsersList]);
+
   const adminAddUser = async (
     email: string,
     password: string,
@@ -518,10 +530,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     branchId?: string
   ) => {
     const res = await db.adminCreateUser(email, password, fullName, role, branchId);
-    if (res.success) {
-      await fetchUsersList();
-      await refreshData();
-    }
+    await fetchUsersList();
     return res;
   };
 
@@ -531,37 +540,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     role: UserRole,
     branchId?: string
   ) => {
-    const res = await db.adminUpdateUser(userId, fullName, role, branchId);
-    if (res.success) {
-      await fetchUsersList();
-      await refreshData();
-      if (currentUser?.id === userId) {
-        await loadUserProfile(currentUser);
-      }
+    const trimmedName = fullName.trim();
+
+    // 1. Optimistically update local users list state in realtime
+    setUsersList((prev) =>
+      prev.map((u) =>
+        u.id === userId || u.email.toLowerCase() === userId.toLowerCase()
+          ? { ...u, fullName: trimmedName, role, branchId: branchId || u.branchId }
+          : u
+      )
+    );
+
+    // 2. If editing own logged-in user profile, update active session state & localStorage
+    if (
+      currentUser &&
+      (currentUser.id === userId || currentUser.email?.toLowerCase() === userId.toLowerCase())
+    ) {
+      const updatedProfile: UserProfile = {
+        ...(userProfile || ({} as any)),
+        id: currentUser.id,
+        email: currentUser.email || '',
+        fullName: trimmedName,
+        role,
+        branchId: branchId || userProfile?.branchId || 'nashik-central',
+        status: userProfile?.status || 'active',
+        createdAt: userProfile?.createdAt || new Date().toISOString(),
+        lastSignInAt: userProfile?.lastSignInAt || new Date().toISOString(),
+      };
+      setUserProfile(updatedProfile);
+      localStorage.setItem('mridaos_user_profile', JSON.stringify(updatedProfile));
+      setCurrentUser((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              user_metadata: {
+                ...prev.user_metadata,
+                full_name: trimmedName,
+                role,
+                branch_id: branchId,
+              },
+            }
+          : prev
+      );
     }
+
+    const res = await db.adminUpdateUser(userId, trimmedName, role, branchId);
+    await fetchUsersList();
     return res;
   };
 
   const adminToggleRevoke = async (userId: string, currentStatus: string) => {
+    const newStatus: 'active' | 'revoked' = currentStatus === 'active' ? 'revoked' : 'active';
+    setUsersList((prev) =>
+      prev.map((u) =>
+        u.id === userId || u.email.toLowerCase() === userId.toLowerCase()
+          ? { ...u, status: newStatus }
+          : u
+      )
+    );
+
     let res;
     if (currentStatus === 'active') {
       res = await db.adminRevokeUser(userId);
     } else {
       res = await db.adminUnrevokeUser(userId);
     }
-    if (res.success) {
-      await fetchUsersList();
-      await refreshData();
-    }
+    await fetchUsersList();
     return res;
   };
 
   const adminRemoveUser = async (userId: string) => {
+    setUsersList((prev) =>
+      prev.filter((u) => u.id !== userId && u.email.toLowerCase() !== userId.toLowerCase())
+    );
     const res = await db.adminDeleteUser(userId);
-    if (res.success) {
-      await fetchUsersList();
-      await refreshData();
-    }
+    await fetchUsersList();
     return res;
   };
 
@@ -665,6 +718,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           db.fetchOperationalAlerts().then((d) => setAlerts(d || []));
           break;
         case 'profiles':
+        case 'user_accounts':
           fetchUsersList();
           break;
         default:

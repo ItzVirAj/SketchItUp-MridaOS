@@ -98,9 +98,15 @@ export const DEFAULT_GENUINE_USERS: UserProfile[] = [
 function getStoredCustomUsers(): UserProfile[] {
   try {
     const raw = localStorage.getItem('mridaos_custom_users');
-    return raw ? JSON.parse(raw) : [];
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+    // Initialize with default genuine users if empty
+    localStorage.setItem('mridaos_custom_users', JSON.stringify(DEFAULT_GENUINE_USERS));
+    return [...DEFAULT_GENUINE_USERS];
   } catch {
-    return [];
+    return [...DEFAULT_GENUINE_USERS];
   }
 }
 
@@ -115,10 +121,10 @@ function saveStoredCustomUsers(users: UserProfile[]) {
 export const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
   try {
     const { data } = await supabase
-      .from('profiles')
+      .from('user_accounts')
       .select('*')
-      .eq('id', userId)
-      .single();
+      .or(`id.eq.${userId},email.eq.${userId}`)
+      .maybeSingle();
 
     if (data) {
       return {
@@ -127,57 +133,49 @@ export const fetchUserProfile = async (userId: string): Promise<UserProfile | nu
         fullName: data.full_name,
         role: data.role as UserRole,
         branchId: data.branch_id,
-        status: data.status,
+        status: data.is_active === false ? 'revoked' : 'active',
         createdAt: data.created_at,
-        lastSignInAt: data.last_sign_in_at,
+        lastSignInAt: data.last_login_at,
       };
     }
+  } catch {}
 
-    // Fallback: check genuine default + custom stored users
-    const all = await fetchAllUsers();
-    return all.find((u) => u.id === userId || u.email.toLowerCase() === userId.toLowerCase()) || null;
-  } catch (err) {
-    console.warn('Fallback fetching user profile from local genuine registry:', err);
-    const all = await fetchAllUsers();
-    return all.find((u) => u.id === userId || u.email.toLowerCase() === userId.toLowerCase()) || null;
-  }
+  const all = await fetchAllUsers();
+  return all.find((u) => u.id === userId || u.email.toLowerCase() === userId.toLowerCase()) || null;
 };
 
 export const fetchAllUsers = async (): Promise<UserProfile[]> => {
   let dbUsers: UserProfile[] = [];
   try {
-    const res = await api.adminUsersApi.list();
-    if (res.data && res.data.length > 0) {
-      dbUsers = res.data;
-    } else {
-      const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
-      if (data && data.length > 0) {
-        dbUsers = data.map((row: any) => ({
-          id: row.id,
-          email: row.email,
-          fullName: row.full_name,
-          role: row.role as UserRole,
-          branchId: row.branch_id,
-          status: row.status,
-          createdAt: row.created_at,
-          lastSignInAt: row.last_sign_in_at,
-        }));
-      }
-    }
-  } catch {
-    // API/DB offline or empty
-  }
+    const { data, error } = await supabase
+      .from('user_accounts')
+      .select('*')
+      .order('created_at', { ascending: true });
 
-  const customUsers = getStoredCustomUsers();
+    if (!error && data && data.length > 0) {
+      dbUsers = data.map((row: any) => ({
+        id: row.id,
+        email: row.email,
+        fullName: row.full_name,
+        role: row.role as UserRole,
+        branchId: row.branch_id || 'nashik-central',
+        status: row.is_active === false ? 'revoked' : 'active',
+        createdAt: row.created_at,
+        lastSignInAt: row.last_login_at,
+      }));
+    }
+  } catch {}
+
+  const storedUsers = getStoredCustomUsers();
   const emailMap = new Map<string, UserProfile>();
 
   // 1. Seed with Default Genuine Users
   DEFAULT_GENUINE_USERS.forEach((u) => emailMap.set(u.email.toLowerCase(), u));
 
-  // 2. Overlay custom created users (persisted by user)
-  customUsers.forEach((u) => emailMap.set(u.email.toLowerCase(), u));
+  // 2. Overlay stored customizations
+  storedUsers.forEach((u) => emailMap.set(u.email.toLowerCase(), u));
 
-  // 3. Overlay DB users if present
+  // 3. Overlay Supabase DB users
   dbUsers.forEach((u) => emailMap.set(u.email.toLowerCase(), u));
 
   return Array.from(emailMap.values());
@@ -207,24 +205,33 @@ export const adminCreateUser = async (
   customUsers.push(newUser);
   saveStoredCustomUsers(customUsers);
 
-  // Store custom password
+  // Store custom password for local login
   try {
     const passwords = JSON.parse(localStorage.getItem('mridaos_custom_passwords') || '{}');
     passwords[normEmail] = password;
     localStorage.setItem('mridaos_custom_passwords', JSON.stringify(passwords));
   } catch {}
 
-  // 2. Try DB insertion
+  // 2. Persist to Supabase Database
   try {
-    await api.adminUsersApi.create({
+    await supabase.from('user_accounts').upsert({
+      id: newUser.id,
       email: normEmail,
-      password,
-      full_name: fullName,
+      password_hash: '$2a$10$fFakeHashForLocalDevSync1234567890abcdefghijklmnopqrstuv',
+      full_name: fullName.trim(),
       role,
-      branch_id: branchId,
+      branch_id: branchId || 'nashik-central',
+      is_active: true,
+      created_at: newUser.createdAt,
+      updated_at: newUser.createdAt,
     });
   } catch (err) {
-    console.warn('DB creation synced locally:', err);
+    console.warn('Realtime user insertion synced locally:', err);
+  }
+
+  // 3. Dispatch realtime change notification
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mridaos_users_changed'));
   }
 
   return { success: true };
@@ -236,61 +243,150 @@ export const adminUpdateUser = async (
   role: UserRole,
   branchId?: string
 ): Promise<{ success: boolean; error?: string }> => {
-  const customUsers = getStoredCustomUsers().map((u) =>
-    u.id === userId || u.email.toLowerCase() === userId.toLowerCase()
-      ? { ...u, fullName: fullName.trim(), role, branchId: branchId || u.branchId }
-      : u
-  );
-  saveStoredCustomUsers(customUsers);
+  const allUsers = getStoredCustomUsers();
+  const trimmedName = fullName.trim();
+  let found = false;
 
+  const updatedUsers = allUsers.map((u) => {
+    if (u.id === userId || u.email.toLowerCase() === userId.toLowerCase()) {
+      found = true;
+      return {
+        ...u,
+        fullName: trimmedName,
+        role,
+        branchId: branchId !== undefined ? branchId : u.branchId,
+      };
+    }
+    return u;
+  });
+
+  // If user wasn't in custom array yet, find in defaults
+  if (!found) {
+    const defaultMatch = DEFAULT_GENUINE_USERS.find(
+      (u) => u.id === userId || u.email.toLowerCase() === userId.toLowerCase()
+    );
+    if (defaultMatch) {
+      updatedUsers.push({
+        ...defaultMatch,
+        fullName: trimmedName,
+        role,
+        branchId: branchId !== undefined ? branchId : defaultMatch.branchId,
+      });
+    }
+  }
+
+  saveStoredCustomUsers(updatedUsers);
+
+  // Sync with Supabase DB
   try {
-    await api.adminUsersApi.update(userId, { full_name: fullName, role, branch_id: branchId });
+    await supabase
+      .from('user_accounts')
+      .update({
+        full_name: trimmedName,
+        role,
+        branch_id: branchId || 'nashik-central',
+        updated_at: new Date().toISOString(),
+      })
+      .or(`id.eq.${userId},email.eq.${userId}`);
   } catch (err) {
-    console.warn('DB update synced locally:', err);
+    console.warn('Realtime Supabase user update:', err);
+  }
+
+  // Dispatch realtime change notification
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mridaos_users_changed'));
   }
 
   return { success: true };
 };
 
 export const adminRevokeUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-  const customUsers = getStoredCustomUsers().map((u) =>
-    u.id === userId || u.email.toLowerCase() === userId.toLowerCase()
-      ? { ...u, status: 'revoked' as const }
-      : u
-  );
-  saveStoredCustomUsers(customUsers);
+  const allUsers = getStoredCustomUsers();
+  let found = false;
+
+  const updatedUsers = allUsers.map((u) => {
+    if (u.id === userId || u.email.toLowerCase() === userId.toLowerCase()) {
+      found = true;
+      return { ...u, status: 'revoked' as const };
+    }
+    return u;
+  });
+
+  if (!found) {
+    const defaultMatch = DEFAULT_GENUINE_USERS.find(
+      (u) => u.id === userId || u.email.toLowerCase() === userId.toLowerCase()
+    );
+    if (defaultMatch) {
+      updatedUsers.push({ ...defaultMatch, status: 'revoked' as const });
+    }
+  }
+
+  saveStoredCustomUsers(updatedUsers);
 
   try {
-    await api.adminUsersApi.revoke(userId);
+    await supabase
+      .from('user_accounts')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .or(`id.eq.${userId},email.eq.${userId}`);
   } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mridaos_users_changed'));
+  }
 
   return { success: true };
 };
 
 export const adminUnrevokeUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-  const customUsers = getStoredCustomUsers().map((u) =>
-    u.id === userId || u.email.toLowerCase() === userId.toLowerCase()
-      ? { ...u, status: 'active' as const }
-      : u
-  );
-  saveStoredCustomUsers(customUsers);
+  const allUsers = getStoredCustomUsers();
+  let found = false;
+
+  const updatedUsers = allUsers.map((u) => {
+    if (u.id === userId || u.email.toLowerCase() === userId.toLowerCase()) {
+      found = true;
+      return { ...u, status: 'active' as const };
+    }
+    return u;
+  });
+
+  if (!found) {
+    const defaultMatch = DEFAULT_GENUINE_USERS.find(
+      (u) => u.id === userId || u.email.toLowerCase() === userId.toLowerCase()
+    );
+    if (defaultMatch) {
+      updatedUsers.push({ ...defaultMatch, status: 'active' as const });
+    }
+  }
+
+  saveStoredCustomUsers(updatedUsers);
 
   try {
-    await api.adminUsersApi.unrevoke(userId);
+    await supabase
+      .from('user_accounts')
+      .update({ is_active: true, updated_at: new Date().toISOString() })
+      .or(`id.eq.${userId},email.eq.${userId}`);
   } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mridaos_users_changed'));
+  }
 
   return { success: true };
 };
 
 export const adminDeleteUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-  const customUsers = getStoredCustomUsers().filter(
+  const allUsers = getStoredCustomUsers().filter(
     (u) => u.id !== userId && u.email.toLowerCase() !== userId.toLowerCase()
   );
-  saveStoredCustomUsers(customUsers);
+  saveStoredCustomUsers(allUsers);
 
   try {
-    await api.adminUsersApi.delete(userId);
+    await supabase.from('user_accounts').delete().or(`id.eq.${userId},email.eq.${userId}`);
   } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mridaos_users_changed'));
+  }
 
   return { success: true };
 };
