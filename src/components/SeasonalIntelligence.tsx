@@ -4,16 +4,44 @@ import {
   Sparkles,
   CloudSun,
   TrendingUp,
-  ArrowUpRight,
-  ShieldCheck,
-  AlertCircle,
-  Package,
-  Calendar,
 } from 'lucide-react';
-import { seasonalIntelligence } from '../data/mockData';
 
 export const SeasonalIntelligence: React.FC = () => {
-  const { setActiveModal, setActiveView } = useApp();
+  const { seasonalInsight, setActiveModal } = useApp();
+
+  const insight = seasonalInsight || {
+    seasonName: 'Active Season Forecast',
+    currentPhase: 'Monitoring Sowing & Growth Phase',
+    weatherCondition: 'Synchronized with Live Regional Weather Telemetry',
+    highDemandProducts: [
+      {
+        name: 'Top-Dressing Fertilizer & NPK Solubles',
+        expectedSurge: 'High seasonal demand during active vegetative growth phase',
+        stockStatus: 'needs_procurement' as const,
+        category: 'Fertilizer',
+      },
+      {
+        name: 'Crop Protection & Bio-Fungicides',
+        expectedSurge: 'Humidity buffer protection for crops and horticulture saplings',
+        stockStatus: 'adequate' as const,
+        category: 'Pesticide',
+      },
+      {
+        name: 'Nursery Saplings & Potting Mix',
+        expectedSurge: 'Active transplantation and grafting season requirements',
+        stockStatus: 'adequate' as const,
+        category: 'Plant/Sapling',
+      },
+      {
+        name: 'Bio-Enzymes & Humic Acid Formulations',
+        expectedSurge: 'Organic root promoter demand for early seedling stages',
+        stockStatus: 'critical' as const,
+        category: 'Bio-Fertilizer',
+      },
+    ],
+    strategicAdvice:
+      'Manage inventory levels based on current crop phase demand. Ensure buffer stock for fast-moving items and maintain strict batch FEFO clearance.',
+  };
 
   return (
     <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#E2EAE5] card-shadow">
@@ -38,7 +66,7 @@ export const SeasonalIntelligence: React.FC = () => {
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 bg-[#F4EDDE] text-[#6E4F18] border border-[#EBE0C8] rounded-full text-xs font-bold flex items-center gap-1.5">
             <CloudSun className="w-3.5 h-3.5 text-[#B57C1E]" />
-            <span>{seasonalIntelligence.seasonName.split(' & ')[0]}</span>
+            <span>{insight.seasonName.split(' & ')[0]}</span>
           </span>
         </div>
       </div>
@@ -51,12 +79,12 @@ export const SeasonalIntelligence: React.FC = () => {
           </div>
           <div>
             <div className="text-xs font-bold text-[#1A1A1A] flex items-center gap-2">
-              <span>Phase: {seasonalIntelligence.currentPhase}</span>
+              <span>Phase: {insight.currentPhase}</span>
               <span className="w-1.5 h-1.5 rounded-full bg-[#079455]"></span>
-              <span className="text-[#55635C] font-medium">{seasonalIntelligence.weatherCondition}</span>
+              <span className="text-[#55635C] font-medium">{insight.weatherCondition}</span>
             </div>
             <p className="text-xs text-[#4F390D] mt-0.5 font-medium leading-relaxed">
-              {seasonalIntelligence.strategicAdvice}
+              {insight.strategicAdvice}
             </p>
           </div>
         </div>
@@ -71,7 +99,7 @@ export const SeasonalIntelligence: React.FC = () => {
 
       {/* High Demand Sowing Categories Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {seasonalIntelligence.highDemandProducts.map((prod, idx) => {
+        {insight.highDemandProducts.map((prod, idx) => {
           const isCriticalStock = prod.stockStatus === 'critical';
           const isNeedsProcure = prod.stockStatus === 'needs_procurement';
 
@@ -105,7 +133,7 @@ export const SeasonalIntelligence: React.FC = () => {
               </div>
 
               <div className="mt-3 pt-2 border-t border-[#EBEFEA] flex items-center justify-between text-xs">
-                <span className="text-[10px] text-[#7A8B82]">Forecast: +45% Demand</span>
+                <span className="text-[10px] text-[#7A8B82]">Forecast Analysis</span>
                 <button
                   onClick={() => setActiveModal('create_po')}
                   className="text-xs font-bold text-[#079455] hover:underline"

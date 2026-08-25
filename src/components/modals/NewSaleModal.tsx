@@ -17,19 +17,24 @@ import confetti from 'canvas-confetti';
 export const NewSaleModal: React.FC = () => {
   const { inventory, khataLedger, addNewSale, setActiveModal } = useApp();
 
-  const [customerName, setCustomerName] = useState('Ramesh Balasaheb Patil');
+  const [customerName, setCustomerName] = useState(khataLedger[0]?.name || '');
+  const [customerPhone, setCustomerPhone] = useState(khataLedger[0]?.phone || '');
   const [isKhata, setIsKhata] = useState(false);
   const [selectedItems, setSelectedItems] = useState<
     { itemId: string; name: string; qty: number; price: number; batch: string }[]
-  >([
-    {
-      itemId: inventory[0]?.id || '1',
-      name: inventory[0]?.name || 'IFFCO Neem Coated Urea',
-      qty: 2,
-      price: inventory[0]?.unitPrice || 266.5,
-      batch: inventory[0]?.batches[0]?.batchNumber || 'IFC-2025-U89',
-    },
-  ]);
+  >(
+    inventory.length > 0
+      ? [
+          {
+            itemId: inventory[0].id,
+            name: inventory[0].name,
+            qty: 1,
+            price: inventory[0].unitPrice,
+            batch: inventory[0].batches[0]?.batchNumber || 'DEFAULT-BATCH',
+          },
+        ]
+      : []
+  );
   const [cashPaidInput, setCashPaidInput] = useState<string>('');
   const [isSaleCompleted, setIsSaleCompleted] = useState(false);
   const [lastInvoiceNumber, setLastInvoiceNumber] = useState('');
@@ -42,19 +47,18 @@ export const NewSaleModal: React.FC = () => {
   const khataAmount = isKhata ? Math.max(0, grandTotal - cashPaid) : 0;
 
   const handleAddItem = () => {
-    const available = inventory[selectedItems.length % inventory.length];
-    if (available) {
-      setSelectedItems((prev) => [
-        ...prev,
-        {
-          itemId: available.id,
-          name: available.name,
-          qty: 1,
-          price: available.unitPrice,
-          batch: available.batches[0]?.batchNumber || 'DEFAULT-LOT',
-        },
-      ]);
-    }
+    if (inventory.length === 0) return;
+    const available = inventory[selectedItems.length % inventory.length] || inventory[0];
+    setSelectedItems((prev) => [
+      ...prev,
+      {
+        itemId: available.id,
+        name: available.name,
+        qty: 1,
+        price: available.unitPrice,
+        batch: available.batches[0]?.batchNumber || 'DEFAULT-BATCH',
+      },
+    ]);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -78,7 +82,7 @@ export const NewSaleModal: React.FC = () => {
                 itemId: found.id,
                 name: found.name,
                 price: found.unitPrice,
-                batch: found.batches[0]?.batchNumber || 'LOT-1',
+                batch: found.batches[0]?.batchNumber || 'DEFAULT-BATCH',
               }
             : item
         )
@@ -88,13 +92,14 @@ export const NewSaleModal: React.FC = () => {
 
   const handleSubmitSale = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedItems.length === 0) return;
+    if (selectedItems.length === 0 || !customerName.trim()) return;
 
     const invNum = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     setLastInvoiceNumber(invNum);
 
     addNewSale({
       customerName,
+      customerPhone,
       isKhata,
       items: selectedItems,
       total: grandTotal,
@@ -111,18 +116,26 @@ export const NewSaleModal: React.FC = () => {
     setIsSaleCompleted(true);
   };
 
+  const handleSelectCustomer = (name: string) => {
+    setCustomerName(name);
+    const existing = khataLedger.find((k) => k.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setCustomerPhone(existing.phone);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
       <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-[#E2EAE5] overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Modal Header */}
+        {/* Header */}
         <div className="p-4 sm:p-5 bg-[#F9FBF9] border-b border-[#E5ECE7] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-[#079455] text-white flex items-center justify-center shadow-2xs">
               <ShoppingBag className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#1A1A1A]">Counter Sale & GST Invoice</h3>
-              <p className="text-xs text-[#6E7B74]">High-speed POS billing with FEFO batch assignment & Khata credit</p>
+              <h3 className="text-base font-bold text-[#1A1A1A]">Counter POS Billing & Invoice</h3>
+              <p className="text-xs text-[#6E7B74]">FEFO batch inventory deduction & Khata sync</p>
             </div>
           </div>
 
@@ -134,100 +147,92 @@ export const NewSaleModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Modal Content */}
         {isSaleCompleted ? (
-          <div className="p-8 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 rounded-3xl bg-[#E0EAE4] text-[#079455] flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-10 h-10" />
+          <div className="p-6 sm:p-8 flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-full bg-[#E0EAE4] text-[#079455] flex items-center justify-center mb-3">
+              <CheckCircle2 className="w-8 h-8" />
             </div>
-
-            <h3 className="text-xl font-extrabold text-[#1A1A1A]">Sale Successfully Billed!</h3>
-            <p className="text-xs text-[#55635C] mt-1 max-w-sm">
-              GST Invoice <strong>#{lastInvoiceNumber}</strong> generated for <strong>{customerName}</strong>. Total billed: <strong>₹{grandTotal.toLocaleString('en-IN')}</strong>.
+            <h3 className="text-lg font-bold text-[#1A1A1A]">Sale Successfully Billed!</h3>
+            <p className="text-xs text-[#6E7B74] mt-1">
+              Invoice <strong>#{lastInvoiceNumber}</strong> generated and synchronized with live Supabase database.
             </p>
 
-            {isKhata && (
-              <div className="mt-3 p-3 bg-[#FEF3F2] border border-[#FECDCA] rounded-2xl text-xs font-semibold text-[#B42318]">
-                ₹{khataAmount.toLocaleString('en-IN')} recorded in {customerName}'s Khata account.
+            <div className="w-full max-w-sm my-5 p-4 bg-[#F9FBF9] rounded-2xl border border-[#E5ECE7] text-left text-xs">
+              <div className="flex justify-between py-1 border-b border-[#EAEFEA]">
+                <span className="text-[#6E7B74]">Customer:</span>
+                <strong className="text-[#1A1A1A]">{customerName}</strong>
               </div>
-            )}
+              <div className="flex justify-between py-1 border-b border-[#EAEFEA]">
+                <span className="text-[#6E7B74]">Total Amount:</span>
+                <strong className="text-[#079455] font-extrabold">₹{grandTotal.toLocaleString('en-IN')}</strong>
+              </div>
+              <div className="flex justify-between py-1 border-b border-[#EAEFEA]">
+                <span className="text-[#6E7B74]">Cash / UPI Received:</span>
+                <strong className="text-[#1A1A1A]">₹{cashPaid.toLocaleString('en-IN')}</strong>
+              </div>
+              {khataAmount > 0 && (
+                <div className="flex justify-between py-1">
+                  <span className="text-[#6E7B74]">Added to Khata:</span>
+                  <strong className="text-[#B54708]">₹{khataAmount.toLocaleString('en-IN')}</strong>
+                </div>
+              )}
+            </div>
 
-            <div className="mt-6 flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  window.print();
-                }}
-                className="px-4 py-2 bg-[#1A1A1A] text-white hover:bg-black rounded-2xl text-xs font-bold flex items-center gap-2 shadow-2xs"
+                onClick={() => setActiveModal('none')}
+                className="px-4 py-2 bg-[#EFF5F1] hover:bg-[#E0EAE4] text-[#079455] text-xs font-bold rounded-xl"
               >
-                <Printer className="w-4 h-4" />
-                <span>Print GST Thermal Receipt</span>
+                Close Window
               </button>
               <button
                 onClick={() => {
                   setIsSaleCompleted(false);
-                  setSelectedItems([]);
-                  setActiveModal('none');
+                  setSelectedItems(inventory.length > 0 ? [{ itemId: inventory[0].id, name: inventory[0].name, qty: 1, price: inventory[0].unitPrice, batch: inventory[0].batches[0]?.batchNumber || 'LOT-1' }] : []);
                 }}
-                className="px-4 py-2 bg-[#079455] text-white hover:bg-[#067A46] rounded-2xl text-xs font-bold shadow-2xs"
+                className="px-4 py-2 bg-[#079455] hover:bg-[#067A46] text-white text-xs font-bold rounded-xl shadow-2xs"
               >
-                Done
+                + Bill Next Customer
               </button>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmitSale} className="p-4 sm:p-5 overflow-y-auto flex-1 flex flex-col gap-4">
-            {/* Customer Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <form onSubmit={handleSubmitSale} className="p-4 sm:p-5 overflow-y-auto flex flex-col gap-4 text-xs">
+            {/* Customer Details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#F9FBFA] rounded-2xl border border-[#E5ECE7]">
               <div>
-                <label className="block text-xs font-bold text-[#1A1A1A] mb-1">Customer / Farmer Name</label>
+                <label className="block font-bold text-[#1A1A1A] mb-1">Customer / Farmer Name</label>
                 <input
                   type="text"
                   required
+                  placeholder="Enter farmer name or select from Khata..."
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#079455]/30 focus:border-[#079455]"
-                  placeholder="Enter farmer name or select..."
+                  onChange={(e) => handleSelectCustomer(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-[#DCE4DF] rounded-xl font-semibold text-xs focus:ring-2 focus:ring-[#079455]/30 focus:outline-none"
                 />
               </div>
 
-              {/* Payment Mode Selector */}
               <div>
-                <label className="block text-xs font-bold text-[#1A1A1A] mb-1">Billing Type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsKhata(false)}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                      !isKhata
-                        ? 'bg-[#079455] text-white border-[#079455] shadow-2xs'
-                        : 'bg-[#F9FBFA] border-[#DCE6DF] text-[#55635C]'
-                    }`}
-                  >
-                    Cash / UPI Immediate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsKhata(true)}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                      isKhata
-                        ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-2xs'
-                        : 'bg-[#F9FBFA] border-[#DCE6DF] text-[#55635C]'
-                    }`}
-                  >
-                    Khata Credit / Split
-                  </button>
-                </div>
+                <label className="block font-bold text-[#1A1A1A] mb-1">Customer Mobile (WhatsApp Invoice)</label>
+                <input
+                  type="text"
+                  placeholder="+91 98XXX XXXXX"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-[#DCE4DF] rounded-xl text-xs focus:ring-2 focus:ring-[#079455]/30 focus:outline-none"
+                />
               </div>
             </div>
 
-            {/* Line Items List */}
+            {/* Selected Items Line Items */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-[#1A1A1A]">Line Items & FEFO Batches</label>
+                <h4 className="font-bold text-[#1A1A1A]">Invoice Line Items</h4>
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="text-xs font-bold text-[#079455] hover:underline flex items-center gap-1"
+                  disabled={inventory.length === 0}
+                  className="text-xs font-bold text-[#079455] hover:underline flex items-center gap-1 disabled:opacity-50"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Line Item</span>
@@ -235,122 +240,140 @@ export const NewSaleModal: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-2">
-                {selectedItems.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 bg-[#F9FBF9] rounded-2xl border border-[#E5ECE7] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-                  >
-                    {/* Item Select */}
-                    <div className="flex-1 min-w-[160px]">
+                {selectedItems.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-[#7A8B82] bg-[#F9FBF9] rounded-2xl border border-dashed border-[#DDE5E0]">
+                    {inventory.length === 0 ? 'No inventory items in database yet. Please add stock in Inventory.' : 'No items added to bill. Click "+ Add Line Item".'}
+                  </div>
+                ) : (
+                  selectedItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 bg-[#F9FBFA] rounded-2xl border border-[#E5ECE7]"
+                    >
                       <select
                         value={item.itemId}
                         onChange={(e) => handleItemSelect(idx, e.target.value)}
-                        className="w-full px-2 py-1.5 rounded-lg border border-[#DCE6DF] bg-white font-semibold text-[#1A1A1A]"
+                        className="flex-1 px-2.5 py-1.5 bg-white border border-[#DCE4DF] rounded-xl text-xs font-bold"
                       >
                         {inventory.map((inv) => (
                           <option key={inv.id} value={inv.id}>
-                            {inv.name} (Stock: {inv.stockQty} {inv.unit})
+                            {inv.name} (Stock: {inv.stockQty} {inv.unit} • ₹{inv.unitPrice})
                           </option>
                         ))}
                       </select>
-                      <div className="text-[10px] text-[#7A8B82] mt-0.5 font-mono">
-                        Assigned FEFO Batch: {item.batch}
-                      </div>
-                    </div>
 
-                    {/* Qty & Price */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-[#7A8B82]">Qty:</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.qty}
-                          onChange={(e) => handleQtyChange(idx, parseInt(e.target.value) || 1)}
-                          className="w-14 px-2 py-1 rounded-lg border border-[#DCE6DF] bg-white text-center font-bold"
-                        />
-                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center border border-[#DCE4DF] bg-white rounded-xl overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleQtyChange(idx, item.qty - 1)}
+                            className="px-2 py-1 bg-[#EFF5F1] hover:bg-[#E0EAE4] font-bold"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.qty}
+                            onChange={(e) => handleQtyChange(idx, parseInt(e.target.value) || 1)}
+                            className="w-12 text-center text-xs font-bold focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleQtyChange(idx, item.qty + 1)}
+                            className="px-2 py-1 bg-[#EFF5F1] hover:bg-[#E0EAE4] font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
 
-                      <div className="text-right min-w-[70px]">
-                        <span className="font-extrabold text-[#1A1A1A] block">
+                        <span className="font-extrabold text-xs text-[#1A1A1A] w-20 text-right">
                           ₹{(item.qty * item.price).toLocaleString('en-IN')}
                         </span>
-                        <span className="text-[10px] text-[#8C9C93]">₹{item.price}/unit</span>
-                      </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(idx)}
-                        className="p-1 rounded-lg text-[#98A2B3] hover:text-[#D92D20] hover:bg-[#FEE4E2]"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          className="p-1.5 rounded-xl text-[#788880] hover:text-[#D92D20] hover:bg-[#FEE4E2]"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
-            {/* Split Details if Khata */}
-            {isKhata && (
-              <div className="p-3 bg-[#FFFAEB] rounded-2xl border border-[#FEDF89] text-xs">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-[#47300B]">Khata Credit Settlement Split</span>
-                  <span className="text-[10px] text-[#7A540E]">Farmer Limit: ₹50,000</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+            {/* Payment & Split Khata Option */}
+            <div className="p-3 bg-[#F4FAF6] rounded-2xl border border-[#D3E5D9]">
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isKhata}
+                    onChange={(e) => setIsKhata(e.target.checked)}
+                    className="w-4 h-4 text-[#079455] rounded accent-[#079455]"
+                  />
+                  <span className="font-bold text-[#1A1A1A]">Customer Credit / Khata Split</span>
+                </label>
+                <span className="text-[10px] text-[#079455] font-bold bg-[#E0EAE4] px-2 py-0.5 rounded-full">
+                  5% GST Included
+                </span>
+              </div>
+
+              {isKhata && (
+                <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-[#D3E5D9]">
                   <div>
-                    <label className="text-[11px] text-[#55635C] block mb-1">Cash Paid Upfront (₹):</label>
+                    <label className="block text-[11px] font-bold text-[#6E7B74] mb-1">
+                      Cash / UPI Received
+                    </label>
                     <input
                       type="number"
+                      placeholder="e.g. 2000"
                       value={cashPaidInput}
                       onChange={(e) => setCashPaidInput(e.target.value)}
-                      placeholder="0"
-                      className="w-full px-3 py-1.5 rounded-xl border border-[#DCE6DF] bg-white text-xs font-bold"
+                      className="w-full px-2.5 py-1.5 bg-white border border-[#DCE4DF] rounded-xl text-xs font-bold"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-[#55635C] block mb-1">Balance added to Khata (₹):</label>
-                    <div className="px-3 py-1.5 rounded-xl bg-white border border-[#FEDF89] text-xs font-extrabold text-[#D92D20]">
+                    <label className="block text-[11px] font-bold text-[#6E7B74] mb-1">
+                      Added to Khata Ledger
+                    </label>
+                    <div className="px-2.5 py-1.5 bg-white border border-[#DCE4DF] rounded-xl text-xs font-extrabold text-[#B54708]">
                       ₹{khataAmount.toLocaleString('en-IN')}
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Bill Summary */}
-            <div className="p-3 bg-[#F2F7F4] rounded-2xl border border-[#D5E5DB] text-xs flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-[#55635C]">
-                <span>Taxable Value:</span>
-                <span>₹{subtotal.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex items-center justify-between text-[#55635C]">
-                <span>Agri-GST (5% FCO Standard):</span>
-                <span>₹{gstAmount.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex items-center justify-between pt-1 border-t border-[#D5E5DB] font-extrabold text-sm text-[#1A1A1A]">
-                <span>Grand Total:</span>
-                <span className="text-[#079455]">₹{grandTotal.toLocaleString('en-IN')}</span>
-              </div>
+              )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="mt-2 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveModal('none')}
-                className="px-4 py-2 rounded-2xl border border-[#DCE6DF] text-xs font-bold text-[#55635C] hover:bg-[#F2F7F4]"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={selectedItems.length === 0}
-                className="px-5 py-2 rounded-2xl bg-[#079455] hover:bg-[#067A46] text-white text-xs font-bold shadow-sm transition-all"
-              >
-                Generate GST Invoice (₹{grandTotal.toLocaleString('en-IN')})
-              </button>
+            {/* Footer Calculation & Submit */}
+            <div className="pt-3 border-t border-[#E5ECE7] flex items-center justify-between">
+              <div>
+                <span className="text-[11px] text-[#7A8B82]">Grand Total (incl. GST):</span>
+                <div className="text-base sm:text-lg font-black text-[#1A1A1A]">
+                  ₹{grandTotal.toLocaleString('en-IN')}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('none')}
+                  className="px-3.5 py-2 bg-[#EFF5F1] text-[#6E7E75] hover:bg-[#E0EAE4] rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={selectedItems.length === 0}
+                  className="px-4 sm:px-5 py-2 bg-[#079455] hover:bg-[#067A46] text-white rounded-xl font-bold shadow-2xs flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>Generate Invoice</span>
+                </button>
+              </div>
             </div>
           </form>
         )}

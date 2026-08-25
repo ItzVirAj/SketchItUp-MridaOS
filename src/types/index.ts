@@ -86,6 +86,7 @@ export interface PurchaseOrder {
   expectedDelivery: string;
   status: 'draft' | 'pending_acknowledgement' | 'dispatched' | 'grn_pending' | 'received';
   paymentTerms: string;
+  notes?: string;
 }
 
 export interface PlantCareTask {
@@ -158,6 +159,7 @@ export interface SaleRecord {
 }
 
 export interface SeasonalInsight {
+  id?: string;
   seasonName: string;
   currentPhase: string;
   weatherCondition: string;
@@ -176,6 +178,14 @@ export interface MortalityRecord {
   plantName: string;
   quantityLost: number;
   estimatedValue: number;
-  reason: 'Pest Infestation' | 'Over-watering' | 'Extreme Heat' | 'Fungal Blight' | 'Root Rot' | 'Transit Damage';
+  reason: 'Pest Infestation' | 'Over-watering' | 'Extreme Heat' | 'Fungal Blight' | 'Root Rot' | 'Transit Damage' | string;
   section: string;
+}
+
+export interface NurseryCamera {
+  id: string;
+  title: string;
+  url: string;
+  status: string;
+  sensorsInfo?: string;
 }

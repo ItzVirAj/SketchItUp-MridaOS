@@ -3,25 +3,23 @@ import { useApp } from '../../context/AppContext';
 import {
   X,
   RefreshCw,
-  AlertTriangle,
-  Boxes,
-  CheckCircle2,
 } from 'lucide-react';
 
 export const StockAdjustModal: React.FC = () => {
   const { inventory, adjustStock, setActiveModal } = useApp();
 
   const [selectedItemId, setSelectedItemId] = useState(inventory[0]?.id || '');
-  const [batchNumber, setBatchNumber] = useState('CRM-24-9921');
-  const [varianceQty, setVarianceQty] = useState<number>(-2);
+  const [batchNumber, setBatchNumber] = useState(inventory[0]?.batches[0]?.batchNumber || 'DEFAULT-BATCH');
+  const [varianceQty, setVarianceQty] = useState<number>(-1);
   const [reason, setReason] = useState('Bag Leakage / Transit Moisture Damage');
 
-  const selectedItem = inventory.find((i) => i.id === selectedItemId);
+  const selectedItem = inventory.find((i) => i.id === selectedItemId) || inventory[0];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedItemId) return;
-    adjustStock(selectedItemId, batchNumber, varianceQty, reason);
+    const itemId = selectedItemId || selectedItem?.id;
+    if (!itemId) return;
+    adjustStock(itemId, batchNumber, varianceQty, reason);
     setActiveModal('none');
   };
 
@@ -47,85 +45,97 @@ export const StockAdjustModal: React.FC = () => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 flex flex-col gap-3.5 text-xs">
-          <div>
-            <label className="block font-bold text-[#1A1A1A] mb-1">Select Inventory Item</label>
-            <select
-              value={selectedItemId}
-              onChange={(e) => {
-                setSelectedItemId(e.target.value);
-                const found = inventory.find((i) => i.id === e.target.value);
-                if (found && found.batches[0]) {
-                  setBatchNumber(found.batches[0].batchNumber);
-                }
-              }}
-              className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] bg-white font-semibold"
-            >
-              {inventory.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name} (Current Stock: {i.stockQty} {i.unit})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="block font-bold text-[#1A1A1A] mb-1">Batch Number</label>
-              <input
-                type="text"
-                value={batchNumber}
-                onChange={(e) => setBatchNumber(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] font-mono font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-[#1A1A1A] mb-1">Adjustment Quantity (+ / -)</label>
-              <input
-                type="number"
-                value={varianceQty}
-                onChange={(e) => setVarianceQty(parseInt(e.target.value) || 0)}
-                className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] font-extrabold text-center"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-bold text-[#1A1A1A] mb-1">Adjustment Reason</label>
-            <select
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] bg-white font-medium"
-            >
-              <option value="Bag Leakage / Transit Moisture Damage">Bag Leakage / Transit Moisture Damage</option>
-              <option value="Expired Batch FEFO Write-Off">Expired Batch FEFO Write-Off</option>
-              <option value="Physical Audit Discrepancy Found">Physical Audit Discrepancy Found</option>
-              <option value="Return to Vendor (RTV) Rejected Stock">Return to Vendor (RTV) Rejected Stock</option>
-              <option value="Nursery Plant Mortality / Wilted">Nursery Plant Mortality / Wilted</option>
-            </select>
-          </div>
-
-          <div className="p-3 bg-[#FFFAEB] rounded-2xl border border-[#FEDF89] text-[11px] text-[#7A540E]">
-            ⚠️ This will record an immutable variance audit log and adjust current book inventory.
-          </div>
-
-          <div className="mt-2 flex items-center justify-end gap-2">
+        {inventory.length === 0 ? (
+          <div className="p-8 text-center text-xs text-[#7A8B82]">
+            <p className="mb-4">No inventory items found in database to adjust.</p>
             <button
-              type="button"
               onClick={() => setActiveModal('none')}
-              className="px-4 py-2 rounded-2xl border border-[#DCE6DF] font-bold text-[#55635C] hover:bg-[#F2F7F4]"
+              className="px-4 py-2 bg-[#1A1A1A] text-white rounded-xl font-bold"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-2xl bg-[#1A1A1A] hover:bg-black text-white font-bold shadow-sm transition-all"
-            >
-              Post Adjustment
+              Close
             </button>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-4 sm:p-5 flex flex-col gap-3.5 text-xs">
+            <div>
+              <label className="block font-bold text-[#1A1A1A] mb-1">Select Inventory Item</label>
+              <select
+                value={selectedItemId || selectedItem?.id}
+                onChange={(e) => {
+                  setSelectedItemId(e.target.value);
+                  const found = inventory.find((i) => i.id === e.target.value);
+                  if (found && found.batches[0]) {
+                    setBatchNumber(found.batches[0].batchNumber);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] bg-white font-semibold"
+              >
+                {inventory.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name} (Current Stock: {i.stockQty} {i.unit})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className="block font-bold text-[#1A1A1A] mb-1">Batch Number</label>
+                <input
+                  type="text"
+                  value={batchNumber}
+                  onChange={(e) => setBatchNumber(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#1A1A1A] mb-1">Adjustment Quantity (+ / -)</label>
+                <input
+                  type="number"
+                  value={varianceQty}
+                  onChange={(e) => setVarianceQty(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] font-extrabold text-center"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-[#1A1A1A] mb-1">Adjustment Reason</label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] bg-white font-medium"
+              >
+                <option value="Bag Leakage / Transit Moisture Damage">Bag Leakage / Transit Moisture Damage</option>
+                <option value="Expired Batch FEFO Write-Off">Expired Batch FEFO Write-Off</option>
+                <option value="Physical Audit Discrepancy Found">Physical Audit Discrepancy Found</option>
+                <option value="Return to Vendor (RTV) Rejected Stock">Return to Vendor (RTV) Rejected Stock</option>
+                <option value="Nursery Plant Mortality / Wilted">Nursery Plant Mortality / Wilted</option>
+              </select>
+            </div>
+
+            <div className="p-3 bg-[#FFFAEB] rounded-2xl border border-[#FEDF89] text-[11px] text-[#7A540E]">
+              ⚠️ This will update live Supabase storage and log an activity trail.
+            </div>
+
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveModal('none')}
+                className="px-4 py-2 rounded-2xl border border-[#DCE6DF] font-bold text-[#55635C] hover:bg-[#F2F7F4]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-2xl bg-[#1A1A1A] hover:bg-black text-white font-bold shadow-sm transition-all"
+              >
+                Post Adjustment
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

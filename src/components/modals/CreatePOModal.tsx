@@ -1,36 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   X,
   Truck,
   Plus,
   Trash2,
-  CheckCircle2,
-  FileCheck,
-  Building2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export const CreatePOModal: React.FC = () => {
   const { inventory, createPurchaseOrder, setActiveModal } = useApp();
 
-  const [supplierName, setSupplierName] = useState('IFFCO State Distributor');
+  const dynamicSuppliers = useMemo(() => {
+    const fromInv = Array.from(new Set(inventory.map((i) => i.supplierName).filter(Boolean)));
+    return fromInv.length > 0 ? fromInv : ['IFFCO State Distributor', 'Coromandel International Ltd', 'Bayer CropScience India', 'Sahyadri Foliage Farm'];
+  }, [inventory]);
+
+  const [supplierName, setSupplierName] = useState(dynamicSuppliers[0] || 'State Agro Distributor');
   const [paymentTerms, setPaymentTerms] = useState('Credit 30 Days');
-  const [lineItems, setLineItems] = useState([
-    { name: 'IFFCO Neem Coated Urea (45kg)', qty: 150, cost: 242 },
-    { name: 'Coromandel Gromor 10:26:26 (50kg)', qty: 60, cost: 1350 },
-  ]);
+  const [lineItems, setLineItems] = useState<
+    { name: string; qty: number; cost: number }[]
+  >(
+    inventory.length > 0
+      ? [
+          {
+            name: inventory[0].name,
+            qty: inventory[0].suggestedReorderQty || 50,
+            cost: inventory[0].costPrice,
+          },
+        ]
+      : [{ name: '', qty: 50, cost: 250 }]
+  );
 
   const totalAmount = lineItems.reduce((sum, item) => sum + item.qty * item.cost, 0);
 
   const handleAddLine = () => {
-    const defaultItem = inventory[0];
+    const available = inventory[lineItems.length % inventory.length] || inventory[0];
     setLineItems((prev) => [
       ...prev,
       {
-        name: defaultItem ? defaultItem.name : 'Agri-Input Product',
-        qty: 50,
-        cost: defaultItem ? defaultItem.costPrice : 350,
+        name: available ? available.name : '',
+        qty: available?.suggestedReorderQty || 50,
+        cost: available ? available.costPrice : 350,
       },
     ]);
   };
@@ -41,7 +52,7 @@ export const CreatePOModal: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (lineItems.length === 0) return;
+    if (lineItems.length === 0 || !supplierName.trim()) return;
 
     createPurchaseOrder({
       supplierName,
@@ -69,7 +80,7 @@ export const CreatePOModal: React.FC = () => {
             </div>
             <div>
               <h3 className="text-base font-bold text-[#1A1A1A]">Create Purchase Order</h3>
-              <p className="text-xs text-[#6E7B74]">Issue official supplier PO under active rate contracts</p>
+              <p className="text-xs text-[#6E7B74]">Issue official supplier PO synchronized with Supabase</p>
             </div>
           </div>
 
@@ -90,12 +101,11 @@ export const CreatePOModal: React.FC = () => {
                 onChange={(e) => setSupplierName(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-[#DCE6DF] bg-white text-xs font-semibold"
               >
-                <option value="IFFCO State Distributor">IFFCO State Distributor</option>
-                <option value="Coromandel International Ltd">Coromandel International Ltd</option>
-                <option value="Bayer CropScience India">Bayer CropScience India</option>
-                <option value="Syngenta India">Syngenta India</option>
-                <option value="Sahyadri Foliage Farm">Sahyadri Foliage Farm</option>
-                <option value="Kisan Organic Bio-Hub">Kisan Organic Bio-Hub</option>
+                {dynamicSuppliers.map((s, idx) => (
+                  <option key={idx} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -133,6 +143,7 @@ export const CreatePOModal: React.FC = () => {
                   <div className="flex-1">
                     <input
                       type="text"
+                      placeholder="Product SKU or Name..."
                       value={item.name}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -198,7 +209,8 @@ export const CreatePOModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-2xl bg-[#1A1A1A] hover:bg-black text-white text-xs font-bold shadow-sm transition-all"
+              disabled={lineItems.length === 0}
+              className="px-5 py-2 rounded-2xl bg-[#1A1A1A] hover:bg-black text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
             >
               Issue Purchase Order
             </button>

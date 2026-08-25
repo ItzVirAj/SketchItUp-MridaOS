@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../context/AppContext';
 import {
   LayoutDashboard,
@@ -12,9 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  RotateCcw,
-  Trash2,
   Database,
+  RefreshCw,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -24,11 +23,10 @@ export const Sidebar: React.FC = () => {
     isSidebarExpanded,
     setIsSidebarExpanded,
     alerts,
-    clearAllData,
-    loadDemoData,
+    isSupabaseConnected,
+    refreshData,
+    seasonalInsight,
   } = useApp();
-
-  const [showDataMenu, setShowDataMenu] = useState(false);
 
   const criticalAlertCount = alerts.filter((a) => a.severity === 'critical').length;
 
@@ -74,7 +72,7 @@ export const Sidebar: React.FC = () => {
                 <span className="font-extrabold text-base tracking-tight text-[#1A1A1A] leading-tight flex items-center gap-1.5">
                   Mrida<span className="text-[#079455]">OS</span>
                   <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#E0EAE4] text-[#079455]">
-                    v2.4
+                    Live
                   </span>
                 </span>
                 <span className="text-[11px] text-[#788880] truncate font-medium">Agri-Retail Operating System</span>
@@ -135,49 +133,26 @@ export const Sidebar: React.FC = () => {
           </nav>
         </div>
 
-        {/* Bottom Section: Data Control & User Profile */}
+        {/* Bottom Section: Supabase Connection Status & User Profile */}
         <div className="flex flex-col gap-2 pt-2 border-t border-[#EAEFEA] w-full items-center">
           
-          {/* Data Controls Trigger */}
+          {/* Supabase Storage Indicator */}
           {isSidebarExpanded ? (
-            <div className="w-full">
+            <div className="w-full p-2.5 bg-[#F6F8F6] rounded-2xl border border-[#E0EAE4] flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <Database className={`w-4 h-4 flex-shrink-0 ${isSupabaseConnected ? 'text-[#079455]' : 'text-[#D92D20]'}`} />
+                <div className="truncate text-[11px]">
+                  <strong className="block text-[#1A1A1A] font-bold">{isSupabaseConnected ? 'Supabase Storage' : 'Offline Backend'}</strong>
+                  <span className="text-[#7A8B82]">{isSupabaseConnected ? 'Realtime Connected' : 'Check .env.local'}</span>
+                </div>
+              </div>
               <button
-                onClick={() => setShowDataMenu(!showDataMenu)}
-                className="w-full px-3 py-1.5 rounded-2xl bg-[#F6F8F6] hover:bg-[#EFF5F1] text-[11px] font-semibold text-[#54645B] flex items-center justify-between transition-colors border border-[#E0EAE4]"
+                onClick={() => refreshData()}
+                className="p-1.5 rounded-xl hover:bg-[#E0EAE4] text-[#079455] transition-colors"
+                title="Sync from Database"
               >
-                <div className="flex items-center gap-1.5">
-                  <Database className="w-3.5 h-3.5 text-[#079455]" />
-                  <span>Data & State Storage</span>
-                </div>
-                <span className="text-[10px] text-[#8C9C93]">Manage</span>
+                <RefreshCw className="w-3.5 h-3.5" />
               </button>
-
-              {showDataMenu && (
-                <div className="mt-1.5 p-2 bg-[#F9FBF9] rounded-2xl border border-[#E0EAE4] flex flex-col gap-1 text-xs">
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Clear all dynamic sales, inventory and khata records to start blank?')) {
-                        clearAllData();
-                        setShowDataMenu(false);
-                      }
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-[#FEE4E2] text-[#D92D20] font-semibold flex items-center gap-1.5 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear / Wipe State</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      loadDemoData();
-                      setShowDataMenu(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-[#E0EAE4] text-[#079455] font-semibold flex items-center gap-1.5 transition-colors"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Restore Sample Dataset</span>
-                  </button>
-                </div>
-              )}
             </div>
           ) : null}
 
@@ -186,8 +161,8 @@ export const Sidebar: React.FC = () => {
             <div className="p-2.5 bg-[#F4EDDE] rounded-2xl border border-[#E8DCC2]/60 flex items-center gap-2 w-full">
               <Sparkles className="w-4 h-4 text-[#B57C1E] flex-shrink-0" />
               <div className="text-[11px] leading-tight text-[#6E4F18]">
-                <strong className="font-semibold block text-[#47300B]">Kharif Monsoon Phase</strong>
-                High Top-Dressing Demand
+                <strong className="font-semibold block text-[#47300B]">{seasonalInsight ? seasonalInsight.seasonName.split(' & ')[0] : 'Seasonal Advisor'}</strong>
+                {seasonalInsight ? seasonalInsight.currentPhase : 'Synchronized with Live Data'}
               </div>
             </div>
           )}

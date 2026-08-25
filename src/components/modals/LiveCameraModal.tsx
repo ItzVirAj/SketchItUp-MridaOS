@@ -5,50 +5,46 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
-  Radio,
-  Sliders,
-  Bell,
-  CheckCircle,
 } from 'lucide-react';
 
 export const LiveCameraModal: React.FC = () => {
-  const { setActiveModal } = useApp();
+  const { cameras: liveCameras, setActiveModal } = useApp();
   const [currentIdx, setCurrentIdx] = useState(0);
   const [photoSnapped, setPhotoSnapped] = useState(false);
 
-  const cameras = [
+  const fallbackCameras = [
     {
-      id: 1,
+      id: 'cam-1',
       title: 'Greenhouse Sector 08 • High Density Seedlings & Microgreens',
       url: 'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=1200&q=80',
-      sensors: 'Moisture: 68% • Temp: 24.2°C • PAR Light: 450 µmol',
+      sensorsInfo: 'Moisture: 68% • Temp: 24.2°C • PAR Light: 450 µmol',
       status: 'Live 1080p 30fps',
     },
     {
-      id: 2,
+      id: 'cam-2',
       title: 'Main Fertilizer Godown • Bay 01 & 02 Pallet Racks',
       url: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80',
-      sensors: 'Humidity: 82% (Warning) • Temp: 28°C • Smoke: Clean',
+      sensorsInfo: 'Humidity: 82% (Warning) • Temp: 28°C • Smoke: Clean',
       status: 'Live 1080p 30fps',
     },
     {
-      id: 3,
+      id: 'cam-3',
       title: 'Polyhouse 03 • Exotic Foliage & Bonsai Propagation Benches',
       url: 'https://images.unsplash.com/photo-1592150621744-aca64f48394a?auto=format&fit=crop&w=1200&q=80',
-      sensors: 'Misting Active • pH: 6.8 • Temp: 23.5°C',
+      sensorsInfo: 'Misting Active • pH: 6.8 • Temp: 23.5°C',
       status: 'Live 1080p 30fps',
     },
     {
-      id: 4,
+      id: 'cam-4',
       title: 'Outdoor Nursery & Seedling Beds • Sector North',
       url: 'https://images.unsplash.com/photo-1508873696983-2df5293cb32f?auto=format&fit=crop&w=1200&q=80',
-      sensors: 'Soil Moisture: 54% • UV Index: 6.2 Mod',
+      sensorsInfo: 'Soil Moisture: 54% • UV Index: 6.2 Mod',
       status: 'Live 1080p 30fps',
     },
   ];
 
-  const cam = cameras[currentIdx];
+  const cameras = liveCameras && liveCameras.length > 0 ? liveCameras : fallbackCameras;
+  const cam = cameras[currentIdx] || cameras[0];
 
   const handleSnap = () => {
     setPhotoSnapped(true);
@@ -64,7 +60,7 @@ export const LiveCameraModal: React.FC = () => {
             <div className="w-2.5 h-2.5 rounded-full bg-[#D92D20] animate-pulse"></div>
             <div>
               <h3 className="text-sm font-bold">{cam.title}</h3>
-              <p className="text-xs text-white/60">{cam.sensors}</p>
+              <p className="text-xs text-white/60">{cam.sensorsInfo || 'Real-time Camera Stream'}</p>
             </div>
           </div>
 
