@@ -15,14 +15,56 @@ import {
   Cpu,
 } from 'lucide-react';
 
-const SEED_DEV_ACCOUNTS = [
-  { email: 'owner@mridaos.in', role: 'Owner / Super Admin', name: 'Champaklal Gada', color: '#079455' },
-  { email: 'admin@mridaos.in', role: 'System Admin', name: 'Jethalal Gada', color: '#175CD3' },
-  { email: 'counter@mridaos.in', role: 'Counter POS Staff', name: 'Natu Kaka', color: '#B54708' },
-  { email: 'procurement@mridaos.in', role: 'Procurement Officer', name: 'Bagha Boy', color: '#0E7090' },
-  { email: 'inventory@mridaos.in', role: 'Inventory Manager', name: 'Taarak Mehta', color: '#7A5E0B' },
-  { email: 'accounts@mridaos.in', role: 'Accounts Executive', name: 'Aatmaram Bhide', color: '#05603A' },
-  { email: 'nursery@mridaos.in', role: 'Nursery Caretaker', name: 'Popatlal Pandey', color: '#12B76A' },
+const DEV_ACCOUNTS = [
+  {
+    email: 'admin@mridaos.in',
+    password: '1234567890',
+    label: 'Superadmin',
+    role: 'admin',
+    name: 'System Administrator',
+  },
+  {
+    email: 'owner@mridaos.in',
+    password: 'MridaOS@2026',
+    label: 'Shop Owner',
+    role: 'owner',
+    name: 'Shop Owner',
+  },
+  {
+    email: 'counter@mridaos.in',
+    password: 'MridaOS@2026',
+    label: 'Counter Staff',
+    role: 'counter_staff',
+    name: 'Counter Staff',
+  },
+  {
+    email: 'inventory@mridaos.in',
+    password: 'MridaOS@2026',
+    label: 'Inventory Manager',
+    role: 'inventory_manager',
+    name: 'Inventory Manager',
+  },
+  {
+    email: 'procurement@mridaos.in',
+    password: 'MridaOS@2026',
+    label: 'Procurement User',
+    role: 'procurement_user',
+    name: 'Procurement User',
+  },
+  {
+    email: 'accounts@mridaos.in',
+    password: 'MridaOS@2026',
+    label: 'Accounts User',
+    role: 'accounts_user',
+    name: 'Accounts User',
+  },
+  {
+    email: 'nurserycare@mridaos.in',
+    password: 'MridaOS@2026',
+    label: 'Nursery Care Staff',
+    role: 'nursery_care_staff',
+    name: 'Nursery Care Staff',
+  },
 ];
 
 import { ForgotPasswordModal } from '../modals/ForgotPasswordModal';
@@ -59,15 +101,15 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleDevQuickLogin = async (devEmail: string) => {
+  const handleDevQuickLogin = async (devEmail: string, devPass: string) => {
     setEmail(devEmail);
-    setPassword('Admin@1234');
+    setPassword(devPass);
     setLocalError(null);
     setAuthError(null);
     setIsLoading(true);
 
     try {
-      const res = await loginWithJwt(devEmail, 'Admin@1234');
+      const res = await loginWithJwt(devEmail, devPass);
       if (!res.success) {
         setLocalError(`Login failed: ${res.error}`);
       }
@@ -286,19 +328,19 @@ export const LoginPage: React.FC = () => {
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                {SEED_DEV_ACCOUNTS.map((acc) => (
+                {DEV_ACCOUNTS.map((account) => (
                   <button
-                    key={acc.email}
+                    key={account.email}
                     type="button"
-                    onClick={() => handleDevQuickLogin(acc.email)}
+                    onClick={() => handleDevQuickLogin(account.email, account.password)}
                     disabled={isLoading}
-                    className="p-2 rounded-xl bg-white hover:bg-[#EFF5F1] border border-[#DCE4DF] hover:border-[#079455] text-left transition-all group flex flex-col justify-between shadow-2xs"
+                    className="p-2 rounded-xl bg-white hover:bg-[#EFF5F1] border border-[#DCE4DF] hover:border-[#079455] text-left transition-all group flex flex-col justify-between shadow-2xs cursor-pointer"
                   >
                     <div className="text-[11px] font-bold text-[#1A1A1A] group-hover:text-[#079455] truncate">
-                      {acc.name}
+                      {account.label}
                     </div>
                     <div className="text-[10px] text-[#6E7B74] truncate flex items-center justify-between mt-0.5">
-                      <span className="font-semibold">{acc.role.split(' ')[0]}</span>
+                      <span className="font-semibold">{account.role}</span>
                       <span className="text-[8px] px-1 py-0.2 rounded bg-[#E0EAE4] text-[#079455] font-bold">
                         Login →
                       </span>

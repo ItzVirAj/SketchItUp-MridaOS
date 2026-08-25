@@ -17,6 +17,8 @@ export const TopBar: React.FC = () => {
     setIsSearchOpen,
     isSupabaseConnected,
     refreshData,
+    userProfile,
+    currentUser,
   } = useApp();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -26,6 +28,15 @@ export const TopBar: React.FC = () => {
     await refreshData();
     setTimeout(() => setIsRefreshing(false), 600);
   };
+
+  const displayName = userProfile?.fullName || currentUser?.user_metadata?.full_name || 'System Administrator';
+  const displayRole = userProfile?.role || currentUser?.user_metadata?.role || 'admin';
+  const initials = displayName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'SA';
 
   return (
     <header
@@ -71,7 +82,7 @@ export const TopBar: React.FC = () => {
           </span>
         </div>
 
-        {/* 3. Right Group: Supabase Status, Alerts, User Profile & Sign Out */}
+        {/* 3. Right Group: Supabase Status, Alerts, Authenticated User & Actions */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
           {/* Supabase Connection Status Badge */}
           <div
@@ -103,6 +114,24 @@ export const TopBar: React.FC = () => {
             <span>{alerts.length} Alerts</span>
             <ArrowUpRight className="w-3.5 h-3.5 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </button>
+
+          {/* Authenticated User Identity Pill */}
+          <div
+            id="topbar-user-badge"
+            className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full bg-[#F9FBFA] border border-[#E0EAE4] shadow-2xs"
+          >
+            <div className="w-6 h-6 rounded-full bg-[#079455] text-white font-bold text-[10px] flex items-center justify-center shadow-2xs">
+              {initials}
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-xs font-bold text-[#1A1A1A] leading-none truncate max-w-[130px]">
+                {displayName}
+              </span>
+              <span className="text-[9px] text-[#7A8B82] capitalize font-medium">
+                {displayRole.replace('_', ' ')}
+              </span>
+            </div>
+          </div>
         </div>
 
       </div>

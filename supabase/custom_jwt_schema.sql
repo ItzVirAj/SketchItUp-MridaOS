@@ -69,25 +69,29 @@ DROP POLICY IF EXISTS "Manage password reset logs" ON public.password_reset_logs
 CREATE POLICY "Manage password reset logs" ON public.password_reset_logs FOR ALL USING (true);
 
 -- ==============================================================================
--- 4. SEED PRODUCTION ACCOUNTS WITH BCRYPT HASHES (Password: Admin@1234 for all)
+-- 4. SEED REAL VERIFIED ACCOUNTS WITH BCRYPT HASHES
+-- Superadmin: admin@mridaos.in (Password: 1234567890, Branch: NULL)
+-- Department Staff: Password: MridaOS@2026
 -- ==============================================================================
+DELETE FROM public.user_accounts WHERE email = 'admin@mridaos.in';
+
 INSERT INTO public.user_accounts (id, email, password_hash, full_name, role, phone, branch_id, is_active)
 VALUES
   (
     'a0000000-0000-0000-0000-000000000001',
     'admin@mridaos.in',
-    crypt('Admin@1234', gen_salt('bf', 10)),
-    'Jethalal Gada',
+    crypt('1234567890', gen_salt('bf', 10)),
+    'System Administrator',
     'admin',
     '+91 98765 00001',
-    'nashik-central',
+    NULL, -- No branch restriction (Superadmin)
     true
   ),
   (
     'a0000000-0000-0000-0000-000000000002',
     'owner@mridaos.in',
-    crypt('Admin@1234', gen_salt('bf', 10)),
-    'Champaklal Gada',
+    crypt('MridaOS@2026', gen_salt('bf', 10)),
+    'Shop Owner',
     'owner',
     '+91 98765 00002',
     'nashik-central',
@@ -96,8 +100,8 @@ VALUES
   (
     'a0000000-0000-0000-0000-000000000003',
     'counter@mridaos.in',
-    crypt('Admin@1234', gen_salt('bf', 10)),
-    'Natu Kaka',
+    crypt('MridaOS@2026', gen_salt('bf', 10)),
+    'Counter Staff',
     'counter_staff',
     '+91 98765 00003',
     'nashik-central',
@@ -105,27 +109,49 @@ VALUES
   ),
   (
     'a0000000-0000-0000-0000-000000000004',
-    'procurement@mridaos.in',
-    crypt('Admin@1234', gen_salt('bf', 10)),
-    'Bagha Boy',
-    'procurement_user',
+    'inventory@mridaos.in',
+    crypt('MridaOS@2026', gen_salt('bf', 10)),
+    'Inventory Manager',
+    'inventory_manager',
     '+91 98765 00004',
     'nashik-central',
     true
   ),
   (
     'a0000000-0000-0000-0000-000000000005',
-    'inventory@mridaos.in',
-    crypt('Admin@1234', gen_salt('bf', 10)),
-    'Taarak Mehta',
-    'inventory_manager',
+    'procurement@mridaos.in',
+    crypt('MridaOS@2026', gen_salt('bf', 10)),
+    'Procurement User',
+    'procurement_user',
     '+91 98765 00005',
+    'nashik-central',
+    true
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000006',
+    'accounts@mridaos.in',
+    crypt('MridaOS@2026', gen_salt('bf', 10)),
+    'Accounts User',
+    'accounts_user',
+    '+91 98765 00006',
+    'nashik-central',
+    true
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000007',
+    'nurserycare@mridaos.in',
+    crypt('MridaOS@2026', gen_salt('bf', 10)),
+    'Nursery Care Staff',
+    'nursery_care_staff',
+    '+91 98765 00007',
     'nashik-central',
     true
   )
 ON CONFLICT (email) DO UPDATE SET
-  password_hash = crypt('Admin@1234', gen_salt('bf', 10)),
+  password_hash = EXCLUDED.password_hash,
   full_name = EXCLUDED.full_name,
   role = EXCLUDED.role,
+  branch_id = EXCLUDED.branch_id,
   is_active = true,
   updated_at = now();
+

@@ -229,21 +229,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.data && !res.error) {
         const { token, expiresAt, sessionId, user } = res.data;
         localStorage.setItem('mridaos_jwt_token', token);
+        localStorage.setItem('access_token', token);
         localStorage.setItem('mridaos_token_exp', expiresAt);
         localStorage.setItem('mridaos_session_id', sessionId);
         localStorage.setItem('mridaos_user_profile', JSON.stringify(user));
 
         setSessionExpiresAt(expiresAt);
-        setUserProfile(user);
-        setCurrentUser({
+        const userFullName = user.fullName || (user as any).full_name || 'User';
+        const userBranchId = user.branchId || (user as any).branch_id || null;
+        const authedUser = {
           id: user.id,
           email: user.email,
           app_metadata: {},
-          user_metadata: { full_name: user.fullName, role: user.role, branch_id: user.branchId },
+          user_metadata: { full_name: userFullName, role: user.role, branch_id: userBranchId },
           aud: 'authenticated',
           created_at: user.createdAt,
-        } as any);
+        } as any;
+        setCurrentUser(authedUser);
 
+        console.log('✅ Logged in as:', userFullName, user.email);
         return { success: true };
       }
     } catch {
@@ -270,14 +274,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
 
       const storedPassword = customPasswords[normEmail];
+      const isSuperadmin = normEmail === 'admin@mridaos.in';
       const isPasswordValid =
         (storedPassword && password === storedPassword) ||
-        password === 'Admin@1234' ||
-        password === 'MridaOS@2026' ||
-        password.length >= 6; // Allow flexible valid dev login
+        (isSuperadmin && (password === '1234567890' || password === 'Admin@1234')) ||
+        (!isSuperadmin && (password === 'MridaOS@2026' || password === 'Admin@1234')) ||
+        password === '1234567890' ||
+        password === 'MridaOS@2026';
 
       if (!isPasswordValid) {
-        return { success: false, error: 'Invalid password. (Default credentials: Admin@1234)' };
+        return { success: false, error: `Invalid password for ${user.email}.` };
       }
 
       // Generate 15-minute token session
@@ -291,28 +297,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email: user.email,
         fullName: user.fullName,
         role: user.role,
-        branchId: user.branchId || 'nashik-central',
+        branchId: user.branchId,
         status: 'active',
         createdAt: user.createdAt,
         lastSignInAt: now.toISOString(),
       };
 
       localStorage.setItem('mridaos_jwt_token', mockToken);
+      localStorage.setItem('access_token', mockToken);
       localStorage.setItem('mridaos_token_exp', expiresAt);
       localStorage.setItem('mridaos_session_id', sessionId);
       localStorage.setItem('mridaos_user_profile', JSON.stringify(userRecord));
 
       setSessionExpiresAt(expiresAt);
       setUserProfile(userRecord);
-      setCurrentUser({
+      const authedUser = {
         id: userRecord.id,
         email: userRecord.email,
         app_metadata: {},
         user_metadata: { full_name: userRecord.fullName, role: userRecord.role, branch_id: userRecord.branchId },
         aud: 'authenticated',
         created_at: userRecord.createdAt,
-      } as any);
+      } as any;
+      setCurrentUser(authedUser);
 
+      console.log('✅ Logged in as:', userRecord.fullName, userRecord.email);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Authentication error occurred.' };
@@ -326,6 +335,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Ignore network errors on logout
     }
     localStorage.removeItem('mridaos_jwt_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('mridaos_token_exp');
     localStorage.removeItem('mridaos_session_id');
     localStorage.removeItem('mridaos_user_profile');
@@ -359,7 +370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     // Check Custom JWT token first
-    const storedToken = localStorage.getItem('mridaos_jwt_token');
+    const storedToken = localStorage.getItem('mridaos_jwt_token') || localStorage.getItem('access_token');
     const storedExp = localStorage.getItem('mridaos_token_exp');
     const storedProfile = localStorage.getItem('mridaos_user_profile');
 
@@ -369,14 +380,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsedProfile = JSON.parse(storedProfile);
         setUserProfile(parsedProfile);
         setSessionExpiresAt(storedExp);
-        setCurrentUser({
+        const restoredUser = {
           id: parsedProfile.id,
           email: parsedProfile.email,
           app_metadata: {},
           user_metadata: { full_name: parsedProfile.fullName, role: parsedProfile.role, branch_id: parsedProfile.branchId },
           aud: 'authenticated',
           created_at: parsedProfile.createdAt,
-        } as any);
+        } as any;
+        setCurrentUser(restoredUser);
+        console.log('📊 Dashboard loaded for:', parsedProfile.fullName, `(${parsedProfile.email})`);
         setIsLoadingAuth(false);
       } else {
         signOut();
