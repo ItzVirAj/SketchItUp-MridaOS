@@ -47,14 +47,30 @@ export const TopBar: React.FC = () => {
     >
       <div className="flex items-center justify-between gap-3 w-full py-0.5">
         
-        {/* 1. Far Left: sketchItUP Brand Logo & System Title */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* 1. Far Left: sketchItUP Brand Logo & Integrated Search Bar */}
+        <div className="flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center text-[19px] sm:text-[21px] font-black tracking-tight leading-none text-[#1A1A1A]">
             <span>sketch<span className="text-[#079455]">ItUP</span></span>
           </div>
-          <span className="hidden sm:inline-block text-xs font-semibold text-[#8C9C93] border-l border-[#DDE5E0] pl-2.5 ml-1">
-            MridaOS Retail Terminal
-          </span>
+          
+          {/* Integrated Global Search Bar */}
+          <div
+            onClick={() => setIsSearchOpen(true)}
+            className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#F6F8F6] hover:bg-[#E0EAE4]/60 border border-[#CCD8D1] focus-within:border-[#079455] rounded-xl w-52 md:w-72 lg:w-80 transition-all cursor-pointer shadow-2xs group"
+            title="Global Realtime Search (Ctrl+K / ⌘K)"
+          >
+            <Search className="w-3.5 h-3.5 text-[#079455] shrink-0" />
+            <input
+              type="text"
+              readOnly
+              onFocus={() => setIsSearchOpen(true)}
+              placeholder="Search items, batches, customers, POs..."
+              className="bg-transparent text-xs font-medium text-[#1A1A1A] placeholder:text-[#8E9B94] w-full focus:outline-none cursor-pointer"
+            />
+            <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-bold bg-white text-[#6E7B74] border border-[#CCD8D1] rounded shadow-2xs shrink-0 group-hover:border-[#079455]/40 transition-colors">
+              ⌘K
+            </kbd>
+          </div>
         </div>
 
         {/* 2. Center: Operating Branch Badge */}
@@ -90,25 +106,11 @@ export const TopBar: React.FC = () => {
             </button>
           </div>
 
-          {/* Global Spotlight Search Trigger Pill */}
-          <button
-            id="topbar-global-search"
-            onClick={() => setIsSearchOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-[#F4EDDE] hover:bg-[#E0EAE4] text-[#1A1A1A] border border-[#CCD8D1] rounded-full text-xs font-bold transition-all shadow-2xs group cursor-pointer"
-            title="Global Search (Ctrl+K / ⌘K)"
-          >
-            <Search className="w-3.5 h-3.5 text-[#079455]" />
-            <span className="hidden md:inline">Quick Search</span>
-            <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[10px] font-mono font-bold bg-white text-[#6E7B74] border border-[#CCD8D1] rounded shadow-2xs">
-              ⌘K
-            </kbd>
-          </button>
-
           {/* Alerts Button */}
           <button
             id="topbar-alerts-pill"
             onClick={() => setActiveModal('quick_view_alerts')}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1A1A1A] text-white rounded-full text-xs font-bold hover:bg-black transition-all shadow-sm group whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1A1A1A] text-white rounded-full text-xs font-bold hover:bg-black transition-all shadow-sm group whitespace-nowrap cursor-pointer"
           >
             <Bell className="w-3.5 h-3.5 text-[#F9AD19] fill-[#F9AD19]" />
             <span>{alerts.length} Alerts</span>
