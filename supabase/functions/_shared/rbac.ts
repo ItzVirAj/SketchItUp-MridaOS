@@ -78,6 +78,18 @@ export const ENDPOINT_PERMISSIONS: Record<string, string[]> = {
   'GET /dashboard/inventory-intelligence': ['inventory_manager', 'procurement_user', 'owner', 'admin'],
   'GET /dashboard/seasonal-intelligence': ['counter_staff', 'inventory_manager', 'procurement_user', 'nursery_care_staff', 'accounts_user', 'owner', 'admin'],
   'GET /dashboard/activity-log': ['owner', 'admin', 'accounts_user'],
+
+  // Workflows & Guided Transitions
+  'POST /workflows/supplier/submit-for-approval': ['procurement_user', 'inventory_manager', 'owner', 'admin'],
+  'POST /workflows/supplier/approve': ['owner', 'admin'],
+  'POST /workflows/supplier/suspend': ['owner', 'admin'],
+  'POST /workflows/po/send-for-acknowledgement': ['procurement_user', 'admin', 'owner'],
+  'PATCH /workflows/po/mark-acknowledged': ['procurement_user', 'admin', 'owner'],
+  'PATCH /workflows/po/mark-dispatched': ['procurement_user', 'admin', 'owner'],
+  'POST /workflows/po/start-grn': ['inventory_manager', 'admin', 'owner'],
+  'POST /workflows/po/complete-grn': ['inventory_manager', 'admin', 'owner'],
+  'GET /workflows/timeline/:entityType/:entityId': ['counter_staff', 'inventory_manager', 'procurement_user', 'nursery_care_staff', 'accounts_user', 'owner', 'admin'],
+  'GET /workflows/next-actions': ['counter_staff', 'inventory_manager', 'procurement_user', 'nursery_care_staff', 'accounts_user', 'owner', 'admin'],
   'GET /dashboard/sensors': ['nursery_care_staff', 'inventory_manager', 'owner', 'admin'],
 };
 

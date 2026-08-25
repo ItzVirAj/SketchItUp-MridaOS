@@ -421,4 +421,67 @@ export const authApi = {
     }),
 };
 
+// ==============================================================================
+// 15. Workflow Orchestration API
+// ==============================================================================
+export const workflowsApi = {
+  // Supplier
+  submitSupplierForApproval: (supplierId: string) =>
+    apiFetch<{ supplier: any; next_step: string }>('workflows/supplier/submit-for-approval', {
+      method: 'POST',
+      body: JSON.stringify({ supplier_id: supplierId }),
+    }),
+
+  approveSupplier: (supplierId: string, notes?: string) =>
+    apiFetch<{ supplier: any; next_step: string }>('workflows/supplier/approve', {
+      method: 'POST',
+      body: JSON.stringify({ supplier_id: supplierId, approved_by_notes: notes }),
+    }),
+
+  suspendSupplier: (supplierId: string, reason: string) =>
+    apiFetch<{ supplier: any; next_step: string | null }>('workflows/supplier/suspend', {
+      method: 'POST',
+      body: JSON.stringify({ supplier_id: supplierId, reason }),
+    }),
+
+  // Purchase Orders & GRN
+  sendPOForAcknowledgement: (poId: string) =>
+    apiFetch<{ po: any; pdf_url: string; next_step: string }>('workflows/po/send-for-acknowledgement', {
+      method: 'POST',
+      body: JSON.stringify({ po_id: poId }),
+    }),
+
+  markPOAcknowledged: (poId: string, eta?: string) =>
+    apiFetch<{ po: any; next_step: string }>('workflows/po/mark-acknowledged', {
+      method: 'PATCH',
+      body: JSON.stringify({ po_id: poId, supplier_eta: eta }),
+    }),
+
+  markPODispatched: (poId: string, trackingInfo?: string) =>
+    apiFetch<{ po: any; next_step: string }>('workflows/po/mark-dispatched', {
+      method: 'PATCH',
+      body: JSON.stringify({ po_id: poId, tracking_info: trackingInfo }),
+    }),
+
+  startPOGRN: (poId: string) =>
+    apiFetch<{ po: any; grn_items: any[]; next_step: string }>('workflows/po/start-grn', {
+      method: 'POST',
+      body: JSON.stringify({ po_id: poId }),
+    }),
+
+  completePOGRN: (poId: string, items: any[], grnDate?: string) =>
+    apiFetch<{ po: any; created_batches: any[]; next_step: string }>('workflows/po/complete-grn', {
+      method: 'POST',
+      body: JSON.stringify({ po_id: poId, items, grn_date: grnDate }),
+    }),
+
+  // Timeline & Next Actions
+  getTimeline: (entityType: string, entityId: string) =>
+    apiFetch<any[]>(`workflows/timeline/${entityType}/${entityId}`),
+
+  getNextActions: () =>
+    apiFetch<{ user_role: string; actions: any[] }>('workflows/next-actions'),
+};
+
+
 
