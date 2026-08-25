@@ -18,6 +18,7 @@ import { SeasonalIntelligence } from './components/SeasonalIntelligence';
 import { ComplianceAndActivity } from './components/ComplianceAndActivity';
 import { DedicatedViews } from './components/views/DedicatedViews';
 import { NotFoundView } from './components/views/NotFoundView';
+import { ResetPasswordView } from './components/views/ResetPasswordView';
 import { LoginPage } from './components/auth/LoginPage';
 import { useLenis } from './hooks/useLenis';
 import { SearchPalette } from './components/SearchPalette';
@@ -76,6 +77,10 @@ const MainLayout: React.FC = () => {
         </div>
       </div>
     );
+  }
+
+  if (activeView === 'reset_password') {
+    return <ResetPasswordView />;
   }
 
   if (!currentUser) {

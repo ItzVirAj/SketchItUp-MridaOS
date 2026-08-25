@@ -15,8 +15,13 @@ import {
   RefreshCw,
   Clock,
   Sparkles,
+  KeyRound,
+  Copy,
+  Check,
+  X,
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../../types';
+import { authApi } from '../../lib/api';
 
 export const UsersDirectoryView: React.FC = () => {
   const {
@@ -32,6 +37,15 @@ export const UsersDirectoryView: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  // Admin Reset Token Modal State
+  const [resetTokenInfo, setResetTokenInfo] = useState<{
+    userName: string;
+    email: string;
+    token: string;
+    resetLink: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
@@ -77,6 +91,27 @@ export const UsersDirectoryView: React.FC = () => {
   const handleRemove = (user: UserProfile) => {
     setSelectedUserForEdit(user);
     setActiveModal('remove_user');
+  };
+
+  const handleGenerateResetToken = async (user: UserProfile) => {
+    setActionLoadingId(user.id);
+    try {
+      const res = await authApi.adminGenerateResetToken(user.email);
+      if (res.data) {
+        setResetTokenInfo({
+          userName: user.fullName,
+          email: user.email,
+          token: res.data.token,
+          resetLink: res.data.resetLink,
+        });
+      } else {
+        alert(`Failed to generate reset token: ${res.error?.message || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      alert(`Failed to generate reset token: ${err.message}`);
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   return (
@@ -256,6 +291,16 @@ export const UsersDirectoryView: React.FC = () => {
                     {/* Actions */}
                     <td className="py-3 px-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Generate 15-Minute Reset Token */}
+                        <button
+                          onClick={() => handleGenerateResetToken(u)}
+                          disabled={actionLoadingId === u.id}
+                          className="p-1.5 rounded-xl border border-[#DCE4DF] bg-white hover:bg-[#F2F7F4] text-[#079455] transition-colors cursor-pointer"
+                          title="Generate 15-Minute Password Reset Link"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
+
                         {/* Edit Button */}
                         <button
                           onClick={() => handleEdit(u)}
@@ -298,6 +343,81 @@ export const UsersDirectoryView: React.FC = () => {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Admin Generated 15-Minute Single-Use Token Modal */}
+      {resetTokenInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs select-none">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-[#E0EAE4] p-6 relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setResetTokenInfo(null)}
+              className="absolute top-4 right-4 p-2 text-[#788880] hover:text-[#1A1A1A] hover:bg-[#EFF5F1] rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-[#E0EAE4] border border-[#C5D7CC] flex items-center justify-center text-[#079455]">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[#1A1A1A]">One-Time Password Reset Token</h3>
+                <p className="text-xs text-[#5E6D65]">For {resetTokenInfo.userName} ({resetTokenInfo.email})</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-[#FEF6EE] border border-[#F9DBAF] rounded-2xl flex items-start gap-2.5 text-xs text-[#B54708] mb-4">
+              <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">15-Minute Expiration & Single-Use:</span>
+                <p className="mt-0.5 text-[#93370D]">
+                  This token expires in 15 minutes and will be immediately invalidated once consumed. Copy and share securely with the employee.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[#344054] mb-1">Direct Reset Link</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={resetTokenInfo.resetLink}
+                    className="flex-1 px-3 py-2 text-xs font-mono bg-[#F9FBFA] border border-[#CCD8D1] rounded-xl text-[#1A1A1A] truncate"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(resetTokenInfo.resetLink);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="px-3 py-2 bg-[#079455] hover:bg-[#067647] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copied' : 'Copy Link'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#344054] mb-1">Raw Token</label>
+                <div className="p-2 bg-[#F9FBFA] rounded-xl border border-[#CCD8D1] text-[11px] font-mono break-all text-[#344054]">
+                  {resetTokenInfo.token}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setResetTokenInfo(null)}
+                className="px-5 py-2.5 bg-[#EFF5F1] hover:bg-[#E0EAE4] text-[#1A1A1A] rounded-xl font-bold text-xs transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

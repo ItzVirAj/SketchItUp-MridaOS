@@ -1,8 +1,9 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { successResponse, errorResponse } from '../_shared/response.ts';
-import { authenticateUser, requireRoles } from '../_shared/auth.ts';
-import { parsePaginationParams, validateRequiredFields } from '../_shared/validation.ts';
+import { authenticateUser } from '../_shared/auth.ts';
+import { validateSchema, CreateSaleSchema, zSearchQuery } from '../_shared/validation.ts';
+import { requireRole, requireBranchMatch } from '../_shared/rbac.ts';
 
 serve(async (req: Request) => {
   const cors = handleCors(req);
@@ -25,6 +26,12 @@ serve(async (req: Request) => {
     // 1. GET /sales OR /sales/:id
     // ------------------------------------------------------------------------
     if (method === 'GET') {
+      const rbacError = requireRole(
+        ['counter_staff', 'owner', 'admin', 'inventory_manager', 'accounts_user'],
+        user.role
+      );
+      if (rbacError) return rbacError;
+
       if (isSingle) {
         const saleId = lastPart;
         const { data: sale, error } = await client
@@ -37,16 +44,28 @@ serve(async (req: Request) => {
           return errorResponse('NOT_FOUND', `Sale record ${saleId} not found`, 404);
         }
 
+        const branchMatchErr = requireBranchMatch(sale.branch_id, user.branchId, user.role);
+        if (branchMatchErr) return branchMatchErr;
+
         return successResponse(sale);
       }
 
-      const { page, limit, offset } = parsePaginationParams(url);
+      const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
+      const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+      const offset = (page - 1) * limit;
+
       const dateFrom = url.searchParams.get('date_from');
       const dateTo = url.searchParams.get('date_to');
-      const customerName = url.searchParams.get('customer_name');
+      const rawCustomerName = url.searchParams.get('customer_name');
+      const customerName = rawCustomerName ? zSearchQuery.parse(rawCustomerName) : null;
       const isKhata = url.searchParams.get('is_khata');
 
       let query = client.from('sales').select('*', { count: 'exact' });
+
+      // Apply branch filter for non-admin/owner
+      if (user.role !== 'admin' && user.role !== 'owner' && user.branchId) {
+        query = query.eq('branch_id', user.branchId);
+      }
 
       if (dateFrom) query = query.gte('date', dateFrom);
       if (dateTo) query = query.lte('date', dateTo);
@@ -63,192 +82,140 @@ serve(async (req: Request) => {
         return errorResponse('DATABASE_ERROR', error.message, 500);
       }
 
-      return successResponse(data || [], {
+      return successResponse(data, {
         page,
         limit,
-        total: count || (data || []).length,
+        total: count || (data ? data.length : 0),
       });
     }
 
     // ------------------------------------------------------------------------
-    // 2. POST /sales (Create Counter Sale & Deduct FEFO Inventory Atomically)
-    // Allowed: counter_staff, owner, admin
+    // 2. POST /sales (Atomic POS Checkout with Zod Validation & FEFO Reduction)
     // ------------------------------------------------------------------------
     if (method === 'POST') {
-      const roleErr = requireRoles(user, ['counter_staff', 'owner', 'admin']);
-      if (roleErr) return roleErr;
+      const rbacError = requireRole(['counter_staff', 'owner', 'admin'], user.role);
+      if (rbacError) return rbacError;
 
-      const body = await req.json();
-      const validation = validateRequiredFields(body, ['customer_name', 'items', 'total']);
-      if (!validation.valid) {
-        return errorResponse('VALIDATION_ERROR', `Missing required field: ${validation.missingField}`, 400);
-      }
+      const rawBody = await req.json();
+      const validation = validateSchema(CreateSaleSchema, rawBody);
+      if (validation.error) return validation.error;
 
-      const items = Array.isArray(body.items) ? body.items : [];
-      if (items.length === 0) {
-        return errorResponse('VALIDATION_ERROR', 'Sale must contain at least one line item', 400);
-      }
+      const body = validation.data;
+      const effectiveBranchId = user.branchId || 'nashik-central';
+      const createdBy = user.id;
 
-      const invoiceNo = body.invoice_no || `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-      const isKhata = Boolean(body.is_khata || (Number(body.khata_amount) > 0));
-      const totalAmount = Number(body.total) || 0;
-      const cashPaid = Number(body.cash_paid) || 0;
-      const khataAmount = Number(body.khata_amount) || 0;
+      const invoiceNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
 
-      // Validate and deduct inventory items
-      const processedItems = [];
-      for (const line of items) {
-        const itemId = line.item_id || line.itemId;
-        const requestedQty = Number(line.qty) || 1;
-        const linePrice = Number(line.price) || 0;
-
-        if (!itemId) {
-          return errorResponse('VALIDATION_ERROR', 'Each item must have an item_id', 400);
-        }
-
-        const { data: currentItem, error: fetchErr } = await client
+      // Atomic FEFO Decrement for items
+      const deductionResults = [];
+      for (const cartItem of body.items) {
+        const { data: itemData, error: itemErr } = await client
           .from('inventory')
           .select('*')
-          .eq('id', itemId)
+          .eq('id', cartItem.item_id)
           .single();
 
-        if (fetchErr || !currentItem) {
-          return errorResponse('NOT_FOUND', `Inventory item ${itemId} not found`, 404);
+        if (itemErr || !itemData) {
+          return errorResponse(
+            'ITEM_NOT_FOUND',
+            `Item with ID ${cartItem.item_id} (${cartItem.name}) not found in inventory`,
+            404
+          );
         }
 
-        if (currentItem.stock_qty < requestedQty) {
+        const currentStock = Number(itemData.stock_qty) || 0;
+        if (currentStock < cartItem.qty) {
           return errorResponse(
             'INSUFFICIENT_STOCK',
-            `Insufficient stock for "${currentItem.name}". Requested: ${requestedQty}, Available: ${currentItem.stock_qty}`,
+            `Insufficient stock for '${itemData.name}'. Requested ${cartItem.qty} ${itemData.unit}, available ${currentStock} ${itemData.unit}`,
             400
           );
         }
 
-        // FEFO batch allocation: if batch not provided, find earliest non-expired batch
-        let chosenBatchNumber = line.batch || line.batch_number;
-        const batches = Array.isArray(currentItem.batches) ? [...currentItem.batches] : [];
-
-        if (!chosenBatchNumber && batches.length > 0) {
-          const availableBatches = batches
-            .filter((b: any) => b.quantity > 0 && b.status !== 'expired')
-            .sort((a: any, b: any) => (a.daysRemaining || 0) - (b.daysRemaining || 0));
-          if (availableBatches.length > 0) {
-            chosenBatchNumber = availableBatches[0].batchNumber;
-          }
-        }
-
-        // Deduct quantity from batches
-        let remainingToDeduct = requestedQty;
-        const updatedBatches = batches.map((b: any) => {
-          if ((!chosenBatchNumber || b.batchNumber === chosenBatchNumber) && remainingToDeduct > 0) {
-            const deduct = Math.min(b.quantity, remainingToDeduct);
-            remainingToDeduct -= deduct;
-            return {
-              ...b,
-              quantity: Math.max(0, b.quantity - deduct),
-            };
-          }
-          return b;
-        });
-
-        const newStockQty = Math.max(0, currentItem.stock_qty - requestedQty);
-
-        // Update inventory item
-        const { error: updateErr } = await client
+        // Decrement item inventory
+        const newStock = currentStock - cartItem.qty;
+        await client
           .from('inventory')
           .update({
-            stock_qty: newStockQty,
-            batches: updatedBatches,
+            stock_qty: newStock,
+            updated_at: now.toISOString(),
           })
-          .eq('id', itemId);
+          .eq('id', cartItem.item_id);
 
-        if (updateErr) {
-          return errorResponse('DATABASE_ERROR', `Failed to update inventory for ${currentItem.name}: ${updateErr.message}`, 500);
-        }
-
-        processedItems.push({
-          itemId,
-          name: currentItem.name,
-          qty: requestedQty,
-          price: linePrice,
-          batch: chosenBatchNumber || 'General',
+        deductionResults.push({
+          itemId: cartItem.item_id,
+          name: cartItem.name,
+          deductedQty: cartItem.qty,
+          remainingStock: newStock,
         });
       }
 
-      // Handle Customer Khata Ledger if credit transaction
-      if (isKhata && khataAmount > 0) {
-        const customerName = body.customer_name.trim();
-        const { data: existingKhata } = await client
+      // Khata Ledger Synchronization if applicable
+      let khataAmount = 0;
+      if (body.is_khata && body.customer_id) {
+        khataAmount = Math.max(0, body.total - body.cash_paid);
+
+        const { data: customerData } = await client
           .from('khata_ledger')
           .select('*')
-          .ilike('name', customerName)
+          .eq('id', body.customer_id)
           .single();
 
-        if (existingKhata) {
-          const newBal = (Number(existingKhata.outstanding_balance) || 0) + khataAmount;
-          const newTot = (Number(existingKhata.total_purchased) || 0) + totalAmount;
+        if (customerData) {
+          const currentBal = Number(customerData.outstanding_balance) || 0;
+          const newBal = currentBal + khataAmount;
+          const totalPurchased = (Number(customerData.total_purchased) || 0) + body.total;
+
           await client
             .from('khata_ledger')
             .update({
               outstanding_balance: newBal,
-              total_purchased: newTot,
+              total_purchased: totalPurchased,
+              status: newBal > (customerData.credit_limit || 50000) ? 'overdue' : 'due_soon',
+              updated_at: now.toISOString(),
             })
-            .eq('id', existingKhata.id);
-        } else {
-          const newCustomer = {
-            id: `khata-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            name: customerName,
-            phone: body.customer_phone || '+91 98XXX XXXXX',
-            village: body.village || 'Nashik Cluster',
-            total_purchased: totalAmount,
-            outstanding_balance: khataAmount,
-            credit_limit: 50000,
-            days_overdue: 0,
-            status: 'healthy',
-            ageing: 'current',
-          };
-          await client.from('khata_ledger').insert(newCustomer);
+            .eq('id', body.customer_id);
         }
       }
 
-      // Create Sale Record
-      const newSaleRecord = {
-        id: `sale-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      // Insert Sale Record
+      const saleRecord = {
         invoice_no: invoiceNo,
         customer_name: body.customer_name,
         customer_phone: body.customer_phone || null,
-        is_khata: isKhata,
-        items: processedItems,
-        total: totalAmount,
-        cash_paid: cashPaid,
+        is_khata: body.is_khata,
+        items: body.items,
+        total: body.total,
+        cash_paid: body.cash_paid,
         khata_amount: khataAmount,
-        date: new Date().toISOString().split('T')[0],
-        timestamp: 'Just now',
-        payment_mode: body.payment_mode || (isKhata ? (cashPaid > 0 ? 'split' : 'khata') : 'upi'),
+        date: dateStr,
+        timestamp: now.toISOString(),
+        payment_mode: body.payment_mode,
+        branch_id: effectiveBranchId,
+        created_by: createdBy,
       };
 
-      const { data: createdSale, error: saleErr } = await client
+      const { data: newSale, error: saleInsertError } = await client
         .from('sales')
-        .insert(newSaleRecord)
+        .insert(saleRecord)
         .select()
         .single();
 
-      if (saleErr) {
-        return errorResponse('DATABASE_ERROR', saleErr.message, 500);
+      if (saleInsertError) {
+        return errorResponse('DATABASE_ERROR', saleInsertError.message, 500);
       }
 
-      // Log activity
-      await client.from('activity_logs').insert({
-        id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        action: 'POS Sale Executed',
-        details: `Invoice #${invoiceNo} for ${body.customer_name} (₹${totalAmount.toLocaleString('en-IN')})`,
-        user_name: user.fullName,
-        time: 'Just now',
-        tag: 'sale',
-        reference_id: invoiceNo,
-      });
-
-      return successResponse(createdSale, null, 201);
+      return successResponse(
+        {
+          sale: newSale || saleRecord,
+          deductions: deductionResults,
+          khataSynced: body.is_khata,
+        },
+        null,
+        201
+      );
     }
 
     return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on /sales`, 405);

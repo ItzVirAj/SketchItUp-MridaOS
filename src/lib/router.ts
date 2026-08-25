@@ -14,6 +14,7 @@ export const VIEW_ROUTES: Record<string, string> = {
   compliance: '/compliance',
   intelligence: '/intelligence',
   users_directory: '/users',
+  reset_password: '/reset-password',
   '404': '/404',
 };
 
@@ -121,6 +122,12 @@ export const ROUTE_ALIASES: Record<string, string> = {
   '/staff': 'users_directory',
   'team': 'users_directory',
   '/team': 'users_directory',
+
+  // Reset Password aliases
+  'reset-password': 'reset_password',
+  '/reset-password': 'reset_password',
+  'reset_password': 'reset_password',
+  '/reset_password': 'reset_password',
   'admin-users': 'users_directory',
   '/admin-users': 'users_directory',
   'security': 'users_directory',

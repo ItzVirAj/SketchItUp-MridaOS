@@ -1,8 +1,9 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { successResponse, errorResponse } from '../_shared/response.ts';
-import { authenticateUser, requireRoles } from '../_shared/auth.ts';
-import { validateRequiredFields } from '../_shared/validation.ts';
+import { authenticateUser } from '../_shared/auth.ts';
+import { validateSchema, RecordPaymentSchema } from '../_shared/validation.ts';
+import { requireRole } from '../_shared/rbac.ts';
 
 serve(async (req: Request) => {
   const cors = handleCors(req);
@@ -21,6 +22,9 @@ serve(async (req: Request) => {
     // 1. GET /khata/ageing-report
     // ------------------------------------------------------------------------
     if (method === 'GET' && path.includes('/ageing-report')) {
+      const rbacError = requireRole(['owner', 'admin', 'accounts_user'], user.role);
+      if (rbacError) return rbacError;
+
       const { data: allKhata, error } = await client.from('khata_ledger').select('*');
       if (error) {
         return errorResponse('DATABASE_ERROR', error.message, 500);
@@ -29,34 +33,40 @@ serve(async (req: Request) => {
       const rows = allKhata || [];
       const totalOutstanding = rows.reduce((sum: number, r: any) => sum + (Number(r.outstanding_balance) || 0), 0);
 
-      const bucketDefs = [
-        { label: 'Current (0–30d)', key: 'current', daysMin: 0, daysMax: 30, color: '#079455' },
-        { label: '31–60 Days', key: '31-60', daysMin: 31, daysMax: 60, color: '#F9AD19' },
-        { label: '61–90 Days', key: '61-90', daysMin: 61, daysMax: 90, color: '#F79009' },
-        { label: '90+ Days (Critical)', key: '90+', daysMin: 91, daysMax: 9999, color: '#D92D20' },
-      ];
+      const buckets = {
+        current: 0,
+        days_1_30: 0,
+        days_31_60: 0,
+        days_61_90: 0,
+        days_90_plus: 0,
+      };
 
-      const buckets = bucketDefs.map((b) => {
-        const matching = rows.filter((r: any) => (r.days_overdue || 0) >= b.daysMin && (r.days_overdue || 0) <= b.daysMax);
-        const amount = matching.reduce((sum: number, r: any) => sum + (Number(r.outstanding_balance) || 0), 0);
-        const count = matching.length;
-        const percentage = totalOutstanding > 0 ? Math.round((amount / totalOutstanding) * 100) : 0;
-        return { ...b, amount, count, percentage };
+      rows.forEach((r: any) => {
+        const bal = Number(r.outstanding_balance) || 0;
+        const days = Number(r.days_overdue) || 0;
+        if (days === 0) buckets.current += bal;
+        else if (days <= 30) buckets.days_1_30 += bal;
+        else if (days <= 60) buckets.days_31_60 += bal;
+        else if (days <= 90) buckets.days_61_90 += bal;
+        else buckets.days_90_plus += bal;
       });
 
       return successResponse({
         totalOutstanding,
-        totalCustomersWithCredit: rows.filter((r: any) => r.outstanding_balance > 0).length,
+        customersCount: rows.length,
         buckets,
+        overdueCustomers: rows.filter((r: any) => (Number(r.days_overdue) || 0) > 0),
       });
     }
 
     // ------------------------------------------------------------------------
-    // 2. GET /khata/ledger/:customer_id
+    // 2. GET /khata/ledger/:customerId
     // ------------------------------------------------------------------------
     if (method === 'GET' && path.includes('/ledger/')) {
-      const parts = path.split('/').filter(Boolean);
-      const customerId = parts[parts.length - 1];
+      const rbacError = requireRole(['counter_staff', 'owner', 'admin', 'accounts_user'], user.role);
+      if (rbacError) return rbacError;
+
+      const customerId = path.split('/ledger/')[1]?.replace(/\/$/, '');
 
       const { data: customer, error: custErr } = await client
         .from('khata_ledger')
@@ -65,62 +75,58 @@ serve(async (req: Request) => {
         .single();
 
       if (custErr || !customer) {
-        return errorResponse('NOT_FOUND', `Khata record for customer ${customerId} not found`, 404);
+        return errorResponse('NOT_FOUND', `Customer ${customerId} not found in Khata ledger`, 404);
       }
 
-      // Fetch transaction history
-      const { data: sales } = await client
+      const { data: transactions } = await client
         .from('sales')
         .select('*')
-        .ilike('customer_name', `%${customer.name}%`)
+        .eq('customer_name', customer.name)
         .order('created_at', { ascending: false });
 
       return successResponse({
         customer,
-        transactions: sales || [],
+        transactions: transactions || [],
       });
     }
 
     // ------------------------------------------------------------------------
-    // 3. POST /khata/payments (Record Farmer Payment & Clear Outstanding)
-    // Allowed: accounts_user, counter_staff, admin, owner
+    // 3. POST /khata/payments (Record Farmer Khata Repayment)
     // ------------------------------------------------------------------------
     if (method === 'POST' && (path.includes('/payments') || path.endsWith('/khata'))) {
-      const roleErr = requireRoles(user, ['accounts_user', 'counter_staff', 'admin', 'owner']);
-      if (roleErr) return roleErr;
+      const rbacError = requireRole(['counter_staff', 'owner', 'admin', 'accounts_user'], user.role);
+      if (rbacError) return rbacError;
 
-      const body = await req.json();
-      const validation = validateRequiredFields(body, ['customer_id', 'amount']);
-      if (!validation.valid) {
-        return errorResponse('VALIDATION_ERROR', `Missing required field: ${validation.missingField}`, 400);
-      }
+      const rawBody = await req.json();
+      const validation = validateSchema(RecordPaymentSchema, rawBody);
+      if (validation.error) return validation.error;
 
-      const customerId = body.customer_id;
-      const paymentAmount = Number(body.amount) || 0;
-      const paymentMode = body.payment_mode || 'cash';
+      const { customer_id, amount, payment_mode } = validation.data;
 
-      const { data: customer, error: fetchErr } = await client
+      const { data: customer, error: custErr } = await client
         .from('khata_ledger')
         .select('*')
-        .eq('id', customerId)
+        .eq('id', customer_id)
         .single();
 
-      if (fetchErr || !customer) {
-        return errorResponse('NOT_FOUND', `Customer ${customerId} not found`, 404);
+      if (custErr || !customer) {
+        return errorResponse('NOT_FOUND', `Customer ${customer_id} not found`, 404);
       }
 
       const currentBalance = Number(customer.outstanding_balance) || 0;
-      const newBalance = Math.max(0, currentBalance - paymentAmount);
-      const newStatus = newBalance === 0 ? 'healthy' : customer.status;
+      const newBalance = Math.max(0, currentBalance - amount);
+      const newDaysOverdue = newBalance === 0 ? 0 : customer.days_overdue;
 
-      const { data: updatedCust, error: updateErr } = await client
+      const { data: updatedCustomer, error: updateErr } = await client
         .from('khata_ledger')
         .update({
           outstanding_balance: newBalance,
-          status: newStatus,
+          days_overdue: newDaysOverdue,
+          status: newBalance === 0 ? 'healthy' : 'due_soon',
           last_payment_date: new Date().toISOString().split('T')[0],
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', customerId)
+        .eq('id', customer_id)
         .select()
         .single();
 
@@ -128,28 +134,19 @@ serve(async (req: Request) => {
         return errorResponse('DATABASE_ERROR', updateErr.message, 500);
       }
 
-      const receiptNo = `REC-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      // Log activity
-      await client.from('activity_logs').insert({
-        id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        action: 'Khata Payment Settle',
-        details: `Settled ₹${paymentAmount.toLocaleString('en-IN')} for ${customer.name} via ${paymentMode}`,
-        user_name: user.fullName,
-        time: 'Just now',
-        tag: 'khata',
-        reference_id: receiptNo,
-      });
+      const receiptNo = `RCP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
       return successResponse({
-        customer: updatedCust,
         receiptNo,
-        amountReceived: paymentAmount,
-        remainingBalance: newBalance,
-      }, null, 201);
+        amountReceived: amount,
+        previousBalance: currentBalance,
+        newBalance,
+        paymentMode: payment_mode,
+        customer: updatedCustomer,
+      });
     }
 
-    return errorResponse('METHOD_NOT_ALLOWED', `Method ${method} not allowed on /khata`, 405);
+    return errorResponse('NOT_FOUND', 'Khata endpoint not found', 404);
   } catch (err: any) {
     return errorResponse('INTERNAL_ERROR', err.message || 'Internal Server Error', 500);
   }

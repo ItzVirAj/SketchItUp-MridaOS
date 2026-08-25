@@ -23,6 +23,8 @@ const SEED_DEV_ACCOUNTS = [
   { email: 'inventory@mridaos.in', role: 'Inventory Manager', name: 'Taarak Mehta', color: '#7A5E0B' },
 ];
 
+import { ForgotPasswordModal } from '../modals/ForgotPasswordModal';
+
 export const LoginPage: React.FC = () => {
   const { authError, setAuthError, loginWithJwt } = useApp();
   const [email, setEmail] = useState('');
@@ -30,6 +32,7 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,9 +212,13 @@ export const LoginPage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#1A1A1A]">
                     Password
                   </label>
-                  <span className="text-[11px] font-bold text-[#B57C1E] hover:underline cursor-pointer" title="Contact your store admin to reset credentials">
-                    Managed by Admin
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotOpen(true)}
+                    className="text-[11px] font-bold text-[#079455] hover:underline cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
                 </div>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#788880]">
@@ -301,6 +308,9 @@ export const LoginPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* 15-Minute Secure Forgot Password Modal */}
+      <ForgotPasswordModal isOpen={isForgotOpen} onClose={() => setIsForgotOpen(false)} />
     </div>
   );
 };

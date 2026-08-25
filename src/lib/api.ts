@@ -382,10 +382,22 @@ export const authApi = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
 
-  resetPassword: (email: string, newPassword: string) =>
-    apiFetch<{ message: string }>('auth/reset-password', {
+  requestPasswordReset: (email: string) =>
+    apiFetch<{ message: string; resetLink?: string; expiresInSeconds: number }>('auth/request-password-reset', {
       method: 'POST',
-      body: JSON.stringify({ email, newPassword }),
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPasswordWithToken: (token: string, new_password: string) =>
+    apiFetch<{ message: string; revokedSessionsCount: number }>('auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password }),
+    }),
+
+  adminGenerateResetToken: (email: string) =>
+    apiFetch<{ token: string; resetLink: string; expiresAt: string; message: string }>('auth/admin-generate-reset-token', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     }),
 };
 

@@ -1,11 +1,17 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { successResponse, errorResponse } from '../_shared/response.ts';
-import { authenticateUser, getServiceRoleClient } from '../_shared/auth.ts';
-import { signJwt, verifyJwt } from '../_shared/jwt.ts';
-import { validateRequiredFields } from '../_shared/validation.ts';
+import { authenticateUser } from '../_shared/auth.ts';
+import { signJwt } from '../_shared/jwt.ts';
+import {
+  validateSchema,
+  RequestPasswordResetSchema,
+  ResetPasswordSchema,
+  ChangePasswordSchema,
+} from '../_shared/validation.ts';
+import { requireRole } from '../_shared/rbac.ts';
 
-// In-memory persistent session and device registry (synced across cluster)
+// Device session registry
 interface DeviceSession {
   id: string;
   userId: string;
@@ -19,7 +25,22 @@ interface DeviceSession {
   expiresAt: string;
 }
 
-// Built-in seed accounts for instant high-security login
+// Time-limited, single-use password reset token record
+interface PasswordResetToken {
+  tokenHash: string;
+  userId: string;
+  email: string;
+  expiresAt: number; // timestamp in ms (15 minutes from issue)
+  usedAt: number | null;
+  createdAt: number;
+}
+
+// Rate limiting tracker for reset requests (3 requests/hour per email)
+interface RateLimitRecord {
+  count: number;
+  resetTime: number;
+}
+
 const SEED_ACCOUNTS = [
   {
     id: 'a0000000-0000-0000-0000-000000000001',
@@ -68,14 +89,39 @@ const SEED_ACCOUNTS = [
   },
 ];
 
-// Active sessions in memory with persistence fallback
+// Persistent state stores
 const activeSessions = new Map<string, DeviceSession>();
 const userPasswords = new Map<string, string>(); // email -> password
+const passwordResetTokens = new Map<string, PasswordResetToken>(); // tokenHash -> Record
+const resetRateLimits = new Map<string, RateLimitRecord>(); // email -> rate limit
 
 // Initialize passwords
 SEED_ACCOUNTS.forEach((acc) => {
   userPasswords.set(acc.email.toLowerCase(), acc.password);
 });
+
+// Helper to hash token with SHA-256
+async function hashToken(token: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Helper to generate 32-byte cryptographically random base64url token
+function generateSecureToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
 
 serve(async (req: Request) => {
   const cors = handleCors(req);
@@ -96,31 +142,28 @@ serve(async (req: Request) => {
     // 1. POST /auth/login (15-min JWT + Device Session)
     // ------------------------------------------------------------------------
     if (method === 'POST' && (path.endsWith('/login') || path === '/auth' || path === '/auth/')) {
-      const body = await req.json();
-      const validationError = validateRequiredFields(body, ['email', 'password']);
-      if (validationError) return validationError;
+      const rawBody = await req.json();
+      const email = (rawBody.email || '').toLowerCase().trim();
+      const password = rawBody.password || '';
 
-      const email = body.email.toLowerCase().trim();
-      const password = body.password;
+      if (!email || !password) {
+        return errorResponse('VALIDATION_ERROR', 'Email and password are required', 400);
+      }
 
-      // Find user account
       const user = SEED_ACCOUNTS.find((a) => a.email.toLowerCase() === email);
       if (!user) {
         return errorResponse('INVALID_CREDENTIALS', 'Invalid email or password', 401);
       }
 
-      // Check current password
       const currentStoredPassword = userPasswords.get(email) || user.password;
       if (password !== currentStoredPassword && password !== 'Admin@1234' && password !== 'MridaOS@2026') {
         return errorResponse('INVALID_CREDENTIALS', 'Invalid email or password', 401);
       }
 
-      // Generate Session ID
       const sessionId = crypto.randomUUID();
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString(); // 15 minutes
+      const expiresAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
 
-      // Parse Device Info
       let browser = 'Chrome';
       if (userAgent.includes('Firefox')) browser = 'Firefox';
       else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) browser = 'Safari';
@@ -135,7 +178,7 @@ serve(async (req: Request) => {
       const deviceSession: DeviceSession = {
         id: sessionId,
         userId: user.id,
-        deviceName: body.deviceName || `${browser} on ${os}`,
+        deviceName: rawBody.deviceName || `${browser} on ${os}`,
         browser,
         os,
         ipAddress: clientIp,
@@ -147,7 +190,6 @@ serve(async (req: Request) => {
 
       activeSessions.set(sessionId, deviceSession);
 
-      // Sign 15-minute custom JWT
       const { token, exp } = await signJwt({
         sub: user.id,
         sessionId,
@@ -160,7 +202,7 @@ serve(async (req: Request) => {
       return successResponse({
         token,
         tokenType: 'Bearer',
-        expiresIn: 900, // 15 minutes
+        expiresIn: 900,
         expiresAt: new Date(exp * 1000).toISOString(),
         sessionId,
         user: {
@@ -178,7 +220,157 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 2. POST /auth/refresh (Rotate 15-min JWT)
+    // 2. POST /auth/request-password-reset (3/hr rate limit + 15-min token)
+    // ------------------------------------------------------------------------
+    if (method === 'POST' && path.includes('/request-password-reset')) {
+      const rawBody = await req.json();
+      const validation = validateSchema(RequestPasswordResetSchema, rawBody);
+      if (validation.error) return validation.error;
+
+      const { email } = validation.data;
+      const user = SEED_ACCOUNTS.find((a) => a.email.toLowerCase() === email);
+
+      // Check rate limit: 3 requests per hour
+      const now = Date.now();
+      const rateKey = email;
+      const existingLimit = resetRateLimits.get(rateKey);
+
+      if (existingLimit) {
+        if (now < existingLimit.resetTime) {
+          if (existingLimit.count >= 3) {
+            const minutesLeft = Math.ceil((existingLimit.resetTime - now) / 60000);
+            return errorResponse(
+              'RATE_LIMIT_EXCEEDED',
+              `Password reset rate limit reached (3 requests/hour). Please try again in ${minutesLeft} minute(s).`,
+              429
+            );
+          }
+          existingLimit.count++;
+        } else {
+          resetRateLimits.set(rateKey, { count: 1, resetTime: now + 3600000 });
+        }
+      } else {
+        resetRateLimits.set(rateKey, { count: 1, resetTime: now + 3600000 });
+      }
+
+      // Generate 32-byte token & store hash
+      const plainToken = generateSecureToken();
+      const tokenHash = await hashToken(plainToken);
+      const expiresAt = now + 15 * 60 * 1000; // 15 minutes
+
+      if (user) {
+        passwordResetTokens.set(tokenHash, {
+          tokenHash,
+          userId: user.id,
+          email: user.email,
+          expiresAt,
+          usedAt: null,
+          createdAt: now,
+        });
+      }
+
+      const resetLink = `http://localhost:3000/reset-password?token=${plainToken}`;
+
+      return successResponse({
+        message: 'If the email exists in our system, a password reset link has been dispatched.',
+        resetLink, // Included for local testability & immediate user access
+        expiresInSeconds: 900,
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // 3. POST /auth/reset-password (Verify hash, single-use, revoke sessions)
+    // ------------------------------------------------------------------------
+    if (method === 'POST' && path.endsWith('/reset-password')) {
+      const rawBody = await req.json();
+      const validation = validateSchema(ResetPasswordSchema, rawBody);
+      if (validation.error) return validation.error;
+
+      const { token, new_password } = validation.data;
+      const tokenHash = await hashToken(token);
+      const resetRecord = passwordResetTokens.get(tokenHash);
+
+      const now = Date.now();
+
+      if (!resetRecord) {
+        return errorResponse('INVALID_TOKEN', 'Invalid or expired password reset token.', 400);
+      }
+
+      if (resetRecord.usedAt !== null) {
+        return errorResponse('TOKEN_ALREADY_USED', 'This password reset token has already been consumed (single-use).', 400);
+      }
+
+      if (now > resetRecord.expiresAt) {
+        return errorResponse('TOKEN_EXPIRED', 'Password reset token has expired (15-minute validity window exceeded).', 400);
+      }
+
+      // 1. Mark token as consumed
+      resetRecord.usedAt = now;
+
+      // 2. Update user's password
+      userPasswords.set(resetRecord.email.toLowerCase(), new_password);
+
+      // 3. Revoke ALL active user sessions (force re-login everywhere)
+      let revokedCount = 0;
+      for (const session of activeSessions.values()) {
+        if (session.userId === resetRecord.userId) {
+          session.isRevoked = true;
+          revokedCount++;
+        }
+      }
+
+      return successResponse({
+        message: 'Password reset successful. All active device sessions have been revoked. Please log in with your new password.',
+        revokedSessionsCount: revokedCount,
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // 4. POST /auth/admin-generate-reset-token (Admin on-demand single-use token)
+    // ------------------------------------------------------------------------
+    if (method === 'POST' && path.includes('/admin-generate-reset-token')) {
+      const { user: callerUser, error: callerAuthErr } = await authenticateUser(req);
+      if (callerAuthErr) return callerAuthErr;
+      if (!callerUser) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+
+      const rbacErr = requireRole(['owner', 'admin'], callerUser.role);
+      if (rbacErr) return rbacErr;
+
+      const rawBody = await req.json();
+      const targetEmail = (rawBody.email || '').toLowerCase().trim();
+      const targetUser = SEED_ACCOUNTS.find((a) => a.email.toLowerCase() === targetEmail);
+
+      if (!targetUser) {
+        return errorResponse('NOT_FOUND', `User with email ${targetEmail} not found`, 404);
+      }
+
+      const plainToken = generateSecureToken();
+      const tokenHash = await hashToken(plainToken);
+      const now = Date.now();
+      const expiresAt = now + 15 * 60 * 1000;
+
+      passwordResetTokens.set(tokenHash, {
+        tokenHash,
+        userId: targetUser.id,
+        email: targetUser.email,
+        expiresAt,
+        usedAt: null,
+        createdAt: now,
+      });
+
+      const resetLink = `http://localhost:3000/reset-password?token=${plainToken}`;
+
+      return successResponse({
+        token: plainToken,
+        resetLink,
+        expiresAt: new Date(expiresAt).toISOString(),
+        expiresInSeconds: 900,
+        message: '15-minute single-use password reset token generated. Share securely with employee.',
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // 5. POST /auth/refresh (Rotate 15-min JWT)
     // ------------------------------------------------------------------------
     if (method === 'POST' && path.includes('/refresh')) {
       const body = await req.json();
@@ -198,7 +390,6 @@ serve(async (req: Request) => {
         return errorResponse('USER_NOT_FOUND', 'User account no longer exists', 401);
       }
 
-      // Update session activity
       session.lastActiveAt = new Date().toISOString();
       session.expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
@@ -225,7 +416,7 @@ serve(async (req: Request) => {
     if (!user) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
 
     // ------------------------------------------------------------------------
-    // 3. POST /auth/logout (Revoke Current Session)
+    // 6. POST /auth/logout (Revoke Current Session)
     // ------------------------------------------------------------------------
     if (method === 'POST' && path.includes('/logout')) {
       if (user.sessionId && activeSessions.has(user.sessionId)) {
@@ -236,7 +427,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 4. GET /auth/devices (List Active Logged-in Devices & Last Logins)
+    // 7. GET /auth/devices (List Active Logged-in Devices & Last Logins)
     // ------------------------------------------------------------------------
     if (method === 'GET' && path.includes('/devices')) {
       const userSessions: DeviceSession[] = [];
@@ -246,7 +437,6 @@ serve(async (req: Request) => {
         }
       }
 
-      // If list is empty, synthesize current session
       if (userSessions.length === 0 && user.sessionId) {
         userSessions.push({
           id: user.sessionId,
@@ -270,7 +460,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 5. DELETE /auth/devices/:id (Revoke Single Device)
+    // 8. DELETE /auth/devices/:id (Revoke Single Device)
     // ------------------------------------------------------------------------
     if (method === 'DELETE' && path.includes('/devices/')) {
       const targetSessionId = path.split('/devices/')[1]?.replace(/\/$/, '');
@@ -285,7 +475,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 6. DELETE /auth/devices (Revoke All Other Devices)
+    // 9. DELETE /auth/devices (Revoke All Other Devices)
     // ------------------------------------------------------------------------
     if (method === 'DELETE' && path.endsWith('/devices')) {
       let revokedCount = 0;
@@ -302,56 +492,24 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 7. POST /auth/change-password (Self-Service Password Change)
+    // 10. POST /auth/change-password (Self-Service Password Change)
     // ------------------------------------------------------------------------
     if (method === 'POST' && path.includes('/change-password')) {
-      const body = await req.json();
-      const validationError = validateRequiredFields(body, ['currentPassword', 'newPassword']);
-      if (validationError) return validationError;
+      const rawBody = await req.json();
+      const validation = validateSchema(ChangePasswordSchema, rawBody);
+      if (validation.error) return validation.error;
 
+      const { currentPassword, newPassword } = validation.data;
       const currentStoredPassword = userPasswords.get(user.email.toLowerCase()) || 'Admin@1234';
-      if (body.currentPassword !== currentStoredPassword) {
+
+      if (currentPassword !== currentStoredPassword) {
         return errorResponse('INVALID_PASSWORD', 'Current password does not match', 400);
       }
 
-      if (body.newPassword.length < 6) {
-        return errorResponse('WEAK_PASSWORD', 'New password must be at least 6 characters long', 400);
-      }
-
-      userPasswords.set(user.email.toLowerCase(), body.newPassword);
+      userPasswords.set(user.email.toLowerCase(), newPassword);
 
       return successResponse({
         message: 'Password updated successfully. Please use your new password on next login.',
-      });
-    }
-
-    // ------------------------------------------------------------------------
-    // 8. POST /auth/reset-password (Admin Password Reset)
-    // ------------------------------------------------------------------------
-    if (method === 'POST' && path.includes('/reset-password')) {
-      if (user.role !== 'admin' && user.role !== 'owner') {
-        return errorResponse('FORBIDDEN', 'Only admins can reset employee passwords', 403);
-      }
-
-      const body = await req.json();
-      const validationError = validateRequiredFields(body, ['email', 'newPassword']);
-      if (validationError) return validationError;
-
-      const targetEmail = body.email.toLowerCase().trim();
-      userPasswords.set(targetEmail, body.newPassword);
-
-      // Revoke target user's active sessions for security
-      const targetUser = SEED_ACCOUNTS.find((a) => a.email.toLowerCase() === targetEmail);
-      if (targetUser) {
-        for (const session of activeSessions.values()) {
-          if (session.userId === targetUser.id) {
-            session.isRevoked = true;
-          }
-        }
-      }
-
-      return successResponse({
-        message: `Password reset successfully for ${targetEmail}. Active sessions were revoked.`,
       });
     }
 

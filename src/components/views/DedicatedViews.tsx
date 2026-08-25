@@ -31,10 +31,15 @@ import { NurseryCameraAndSensors } from '../NurseryCameraAndSensors';
 import { SeasonalIntelligence } from '../SeasonalIntelligence';
 import { ComplianceAndActivity } from '../ComplianceAndActivity';
 import { UsersDirectoryView } from './UsersDirectoryView';
+import { ResetPasswordView } from './ResetPasswordView';
 import { NotFoundView } from './NotFoundView';
 
 export const DedicatedViews: React.FC = () => {
   const { activeView, setActiveModal, inventory, khataLedger, purchaseOrders, licenses } = useApp();
+
+  if (activeView === 'reset_password') {
+    return <ResetPasswordView />;
+  }
 
   if (activeView === 'users_directory') {
     return <UsersDirectoryView />;
