@@ -446,18 +446,21 @@ export const SalesAnalytics: React.FC = () => {
                 </tr>
               ) : (
                 safeSales.slice(0, 10).map((sale, idx) => {
-                  const invoiceNo = sale.invoice_no || `INV/00${101 + idx}/2025-26`;
-                  const taxable = (sale as any).total_taxable_amount || Math.round(sale.total * 0.85);
-                  const gstTax = (sale as any).total_tax || Math.round(sale.total * 0.15);
+                  const invoiceNo = sale.invoiceNo || (sale as any).invoice_no || `INV/2026/00${101 + idx}`;
+                  const customerName = sale.customerName || (sale as any).customer_name || 'Walk-in Farmer';
+                  const isKhata = sale.isKhata ?? (sale as any).is_khata ?? false;
+                  const paymentMode = sale.paymentMode || (sale as any).payment_mode || (isKhata ? 'khata' : 'cash');
+                  const taxable = (sale as any).total_taxable_amount || Math.round(sale.total / 1.05);
+                  const gstTax = (sale as any).total_tax || (sale.total - taxable);
 
                   return (
                     <tr key={sale.id || idx} className="hover:bg-[#F9FBFA]">
                       <td className="py-2.5 px-3 font-mono font-bold text-[#079455]">
                         {invoiceNo}
                       </td>
-                      <td className="py-2.5 px-3 text-[#55635C]">{sale.date}</td>
+                      <td className="py-2.5 px-3 text-[#55635C]">{sale.date || 'Today'}</td>
                       <td className="py-2.5 px-3">
-                        <div className="font-bold text-[#1A1A1A]">{sale.customer_name}</div>
+                        <div className="font-bold text-[#1A1A1A]">{customerName}</div>
                         {(sale as any).customer_gstin && (
                           <div className="text-[10px] font-mono text-[#175CD3]">
                             {(sale as any).customer_gstin}
@@ -478,13 +481,13 @@ export const SalesAnalytics: React.FC = () => {
                       </td>
                       <td className="py-2.5 px-3 text-center">
                         <span
-                          className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
-                            sale.is_khata
+                          className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                            isKhata
                               ? 'bg-[#FEF0C7] text-[#B54708]'
                               : 'bg-[#EFF8FF] text-[#175CD3]'
                           }`}
                         >
-                          {sale.payment_mode || (sale.is_khata ? 'Khata' : 'Cash')}
+                          {paymentMode}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-right">

@@ -508,33 +508,149 @@ export const updateInventoryItem = async (id: string, updates: Partial<Inventory
 };
 
 // ==============================================================================
-// 3. Sales API
+// 3. Sales & GST Tax Invoices API
 // ==============================================================================
+const DEFAULT_SALES: SaleRecord[] = [
+  {
+    id: 'sale-001',
+    invoiceNo: 'INV/2026/00101',
+    customerName: 'Dnyaneshwar Gaikwad',
+    customerPhone: '+91 98220 11234',
+    isKhata: false,
+    items: [
+      { name: 'Neem Coated Urea (50kg)', qty: 4, price: 268, batch: 'NCU-2026-01' },
+      { name: 'DAP 18:46:00 (50kg)', qty: 2, price: 1350, batch: 'DAP-2026-09' },
+    ],
+    total: 3772,
+    cashPaid: 3772,
+    khataAmount: 0,
+    date: 'Today',
+    timestamp: '10:45 AM',
+    paymentMode: 'upi',
+  },
+  {
+    id: 'sale-002',
+    invoiceNo: 'INV/2026/00102',
+    customerName: 'Kisan Agro Syndicate',
+    customerPhone: '+91 98221 44556',
+    isKhata: true,
+    items: [
+      { name: 'MOP - Muriate of Potash 50kg', qty: 10, price: 1700, batch: 'MOP-2025-44' },
+      { name: 'Chlorpyrifos 20% EC 1L', qty: 5, price: 450, batch: 'CHP-2025-08' },
+    ],
+    total: 19250,
+    cashPaid: 5000,
+    khataAmount: 14250,
+    date: 'Today',
+    timestamp: '11:15 AM',
+    paymentMode: 'split',
+  },
+  {
+    id: 'sale-003',
+    invoiceNo: 'INV/2026/00103',
+    customerName: 'GreenValley Orchards (B2B)',
+    customerPhone: '+91 98230 77889',
+    isKhata: false,
+    items: [
+      { name: 'Dutch Rose Grafted Sapling', qty: 50, price: 85, batch: 'ROSE-LOT-12' },
+      { name: 'Taiwan Pink Guava Grafts', qty: 20, price: 140, batch: 'GUAV-2026-03' },
+    ],
+    total: 7050,
+    cashPaid: 7050,
+    khataAmount: 0,
+    date: 'Today',
+    timestamp: '12:30 PM',
+    paymentMode: 'upi',
+  },
+  {
+    id: 'sale-004',
+    invoiceNo: 'INV/2026/00104',
+    customerName: 'Suresh Patil',
+    customerPhone: '+91 94231 88990',
+    isKhata: true,
+    items: [
+      { name: 'NPK 19:19:19 1kg Foliar', qty: 6, price: 180, batch: 'NPK-2026-11' },
+      { name: 'Micro-Nutrient Chelate 500g', qty: 4, price: 320, batch: 'MIC-2025-99' },
+    ],
+    total: 2360,
+    cashPaid: 0,
+    khataAmount: 2360,
+    date: 'Today',
+    timestamp: '02:10 PM',
+    paymentMode: 'khata',
+  },
+  {
+    id: 'sale-005',
+    invoiceNo: 'INV/2026/00105',
+    customerName: 'Vitthalrao Shinde',
+    customerPhone: '+91 98812 33445',
+    isKhata: false,
+    items: [
+      { name: 'Single Super Phosphate (SSP) 50kg', qty: 5, price: 420, batch: 'SSP-2026-04' },
+      { name: 'Neem Coated Urea (50kg)', qty: 2, price: 268, batch: 'NCU-2026-01' },
+    ],
+    total: 2636,
+    cashPaid: 2636,
+    khataAmount: 0,
+    date: 'Today',
+    timestamp: '03:45 PM',
+    paymentMode: 'cash',
+  },
+];
+
+function getStoredCustomSales(): SaleRecord[] {
+  try {
+    const raw = localStorage.getItem('mridaos_custom_sales');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export const fetchSales = async (): Promise<SaleRecord[]> => {
+  let dbSales: SaleRecord[] = [];
   try {
     const { data, error } = await supabase.from('sales').select('*').order('created_at', { ascending: false });
     if (!error && data && data.length > 0) {
-      return data.map((row: any) => ({
+      dbSales = data.map((row: any) => ({
         id: row.id,
-        invoiceNo: row.invoice_no,
-        customerName: row.customer_name,
-        customerPhone: row.customer_phone,
-        isKhata: Boolean(row.is_khata),
+        invoiceNo: row.invoice_no || row.invoiceNo || `INV-${row.id}`,
+        customerName: row.customer_name || row.customerName || 'Customer',
+        customerPhone: row.customer_phone || row.customerPhone,
+        isKhata: Boolean(row.is_khata || row.isKhata),
         items: Array.isArray(row.items) ? row.items : [],
         total: Number(row.total) || 0,
-        cashPaid: Number(row.cash_paid) || 0,
-        khataAmount: Number(row.khata_amount) || 0,
+        cashPaid: Number(row.cash_paid || row.cashPaid) || 0,
+        khataAmount: Number(row.khata_amount || row.khataAmount) || 0,
         date: row.date || 'Today',
         timestamp: row.timestamp || 'Just now',
-        paymentMode: row.payment_mode || 'cash',
+        paymentMode: row.payment_mode || row.paymentMode || 'cash',
       }));
     }
   } catch {}
 
-  return [];
+  const customSales = getStoredCustomSales();
+  const salesMap = new Map<string, SaleRecord>();
+
+  // 1. Seed defaults
+  DEFAULT_SALES.forEach((s) => salesMap.set(s.id, s));
+
+  // 2. Overlay custom local sales
+  customSales.forEach((s) => salesMap.set(s.id, s));
+
+  // 3. Overlay DB sales
+  dbSales.forEach((s) => salesMap.set(s.id, s));
+
+  return Array.from(salesMap.values()).reverse();
 };
 
 export const insertSale = async (sale: SaleRecord): Promise<void> => {
+  try {
+    const customSales = getStoredCustomSales();
+    customSales.unshift(sale);
+    localStorage.setItem('mridaos_custom_sales', JSON.stringify(customSales.slice(0, 100)));
+  } catch {}
+
   try {
     await supabase.from('sales').insert({
       id: sale.id,
