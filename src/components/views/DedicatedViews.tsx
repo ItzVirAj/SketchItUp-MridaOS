@@ -32,6 +32,7 @@ import { SeasonalIntelligence } from '../SeasonalIntelligence';
 import { ComplianceAndActivity } from '../ComplianceAndActivity';
 import { UsersDirectoryView } from './UsersDirectoryView';
 import { ResetPasswordView } from './ResetPasswordView';
+import { GSTReportsView } from './GSTReportsView';
 import { NotFoundView } from './NotFoundView';
 
 export const DedicatedViews: React.FC = () => {
@@ -43,6 +44,10 @@ export const DedicatedViews: React.FC = () => {
 
   if (activeView === 'users_directory') {
     return <UsersDirectoryView />;
+  }
+
+  if (activeView === 'gst_reports') {
+    return <GSTReportsView />;
   }
 
   if (activeView === 'sales_pos') {

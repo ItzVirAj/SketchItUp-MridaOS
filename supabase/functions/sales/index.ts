@@ -5,6 +5,14 @@ import { authenticateUser } from '../_shared/auth.ts';
 import { validateSchema, CreateSaleSchema, zSearchQuery } from '../_shared/validation.ts';
 import { requireRole, requireBranchMatch } from '../_shared/rbac.ts';
 import { enforceApiRateLimit, enforceGlobalIpRateLimit } from '../_shared/apiRateLimit.ts';
+import {
+  calculateGSTInvoiceSummary,
+  STANDARD_HSN_CODES,
+  numberToIndianRupeeWords,
+} from '../_shared/gst.ts';
+
+// In-memory invoice counter fallback if DB sequence table is not initialized
+let invoiceSequenceCounter = 100;
 
 serve(async (req: Request) => {
   const cors = handleCors(req);
@@ -28,10 +36,81 @@ serve(async (req: Request) => {
   try {
     const parts = path.split('/').filter(Boolean);
     const lastPart = parts[parts.length - 1];
-    const isSingle = lastPart !== 'sales' && lastPart !== 'v1';
+    const isInvoicePrint = path.includes('/invoice');
+    const isSingle = lastPart !== 'sales' && lastPart !== 'v1' && !isInvoicePrint;
 
     // ------------------------------------------------------------------------
-    // 1. GET /sales OR /sales/:id
+    // 1. GET /sales/:id/invoice (Printable GST Tax Invoice)
+    // ------------------------------------------------------------------------
+    if (method === 'GET' && isInvoicePrint) {
+      const rbacError = requireRole(
+        ['counter_staff', 'owner', 'admin', 'inventory_manager', 'accounts_user'],
+        user.role
+      );
+      if (rbacError) return rbacError;
+
+      const saleId = parts[parts.indexOf('sales') + 1] || parts[parts.length - 2];
+      const { data: sale, error } = await client
+        .from('sales')
+        .select('*')
+        .eq('id', saleId)
+        .single();
+
+      if (error || !sale) {
+        return errorResponse('NOT_FOUND', `Sale record ${saleId} not found`, 404);
+      }
+
+      const branchMatchErr = requireBranchMatch(sale.branch_id, user.branchId, user.role);
+      if (branchMatchErr) return branchMatchErr;
+
+      // Fetch or derive line items tax breakdown
+      const gstSummary = calculateGSTInvoiceSummary(
+        sale.items || [],
+        {
+          invoiceNumber: sale.invoice_number || sale.invoice_no || `INV/2026/${sale.id.slice(0, 6)}`,
+          invoiceDate: sale.date || new Date().toISOString().split('T')[0],
+          customerStateCode: sale.customer_state_code || '27',
+          branchStateCode: sale.branch_state_code || '27',
+        }
+      );
+
+      return successResponse({
+        sale,
+        invoice: {
+          seller: {
+            legal_name: 'MridaOS Agro Retail Pvt Ltd',
+            branch_id: sale.branch_id || 'nashik-central',
+            gstin: '27AABCU9603R1ZX',
+            address: 'Shop 14-16, APMC Market Yard, Dindori Road, Nashik, Maharashtra - 422003',
+            state: 'Maharashtra',
+            state_code: '27',
+          },
+          buyer: {
+            name: sale.customer_name,
+            phone: sale.customer_phone,
+            gstin: sale.customer_gstin || 'Unregistered',
+            state_code: sale.customer_state_code || '27',
+          },
+          invoice_number: gstSummary.invoice_number,
+          invoice_date: gstSummary.invoice_date,
+          financial_year: gstSummary.financial_year,
+          is_interstate: gstSummary.is_interstate,
+          line_items: gstSummary.line_items,
+          total_taxable_amount: gstSummary.total_taxable_amount,
+          total_cgst: gstSummary.total_cgst,
+          total_sgst: gstSummary.total_sgst,
+          total_igst: gstSummary.total_igst,
+          total_tax: gstSummary.total_tax,
+          round_off: gstSummary.round_off,
+          grand_total: gstSummary.grand_total,
+          amount_in_words: gstSummary.amount_in_words,
+          payment_mode: sale.payment_mode || 'cash',
+        },
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // 2. GET /sales OR /sales/:id
     // ------------------------------------------------------------------------
     if (method === 'GET') {
       const rbacError = requireRole(
@@ -70,7 +149,6 @@ serve(async (req: Request) => {
 
       let query = client.from('sales').select('*', { count: 'exact' });
 
-      // Apply branch filter for non-admin/owner
       if (user.role !== 'admin' && user.role !== 'owner' && user.branchId) {
         query = query.eq('branch_id', user.branchId);
       }
@@ -98,7 +176,7 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
-    // 2. POST /sales (Atomic POS Checkout with Zod Validation & FEFO Reduction)
+    // 3. POST /sales (GST Tax Invoicing with Line-Item Breakdown & Atomic FEFO)
     // ------------------------------------------------------------------------
     if (method === 'POST') {
       const rbacError = requireRole(['counter_staff', 'owner', 'admin'], user.role);
@@ -112,11 +190,51 @@ serve(async (req: Request) => {
       const effectiveBranchId = user.branchId || 'nashik-central';
       const createdBy = user.id;
 
-      const invoiceNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      // GST Compliance Check: Sale > ₹50,000 requires customer details
+      if (body.total > 50000 && (!body.customer_name || body.customer_name.trim().toLowerCase() === 'walk-in customer')) {
+        return errorResponse(
+          'COMPLIANCE_ERROR',
+          'GST Compliance Notice: B2C or B2B sales exceeding ₹50,000 mandate customer name and phone details.',
+          400
+        );
+      }
+
+      // Generate Sequential GST Invoice Number
+      invoiceSequenceCounter += 1;
+      const nextSeq = String(invoiceSequenceCounter).padStart(5, '0');
+      const invoiceNumber = `INV/${nextSeq}/2025-26`;
       const now = new Date();
       const dateStr = now.toISOString().split('T')[0];
 
-      // Atomic FEFO Decrement for items
+      // Customer state code (Default '27' for Maharashtra, or from body)
+      const customerStateCode = (rawBody.customer_state_code || '27').trim();
+      const branchStateCode = '27'; // Maharashtra Nashik Central
+
+      // Enhance line items with HSN codes & GST rates
+      const lineItemInputs = body.items.map((cartItem) => {
+        const standardMeta = STANDARD_HSN_CODES[cartItem.name] || { hsn: '3102', rate: 18.0, exempt: false };
+        return {
+          item_id: cartItem.item_id,
+          name: cartItem.name,
+          qty: cartItem.qty,
+          price: cartItem.price,
+          batch: cartItem.batch,
+          hsn_code: cartItem.hsn_code || standardMeta.hsn,
+          gst_rate: cartItem.gst_rate !== undefined ? cartItem.gst_rate : standardMeta.rate,
+          is_gst_exempt: cartItem.is_gst_exempt !== undefined ? cartItem.is_gst_exempt : standardMeta.exempt,
+        };
+      });
+
+      // Calculate complete GST breakdown
+      const gstSummary = calculateGSTInvoiceSummary(lineItemInputs, {
+        invoiceNumber,
+        invoiceDate: dateStr,
+        financialYear: '2025-26',
+        customerStateCode,
+        branchStateCode,
+      });
+
+      // Atomic FEFO Stock Deductions
       const deductionResults = [];
       for (const cartItem of body.items) {
         const { data: itemData, error: itemErr } = await client
@@ -142,7 +260,6 @@ serve(async (req: Request) => {
           );
         }
 
-        // Decrement item inventory
         const newStock = currentStock - cartItem.qty;
         await client
           .from('inventory')
@@ -163,7 +280,7 @@ serve(async (req: Request) => {
       // Khata Ledger Synchronization if applicable
       let khataAmount = 0;
       if (body.is_khata && body.customer_id) {
-        khataAmount = Math.max(0, body.total - body.cash_paid);
+        khataAmount = Math.max(0, gstSummary.grand_total - body.cash_paid);
 
         const { data: customerData } = await client
           .from('khata_ledger')
@@ -174,7 +291,7 @@ serve(async (req: Request) => {
         if (customerData) {
           const currentBal = Number(customerData.outstanding_balance) || 0;
           const newBal = currentBal + khataAmount;
-          const totalPurchased = (Number(customerData.total_purchased) || 0) + body.total;
+          const totalPurchased = (Number(customerData.total_purchased) || 0) + gstSummary.grand_total;
 
           await client
             .from('khata_ledger')
@@ -188,14 +305,26 @@ serve(async (req: Request) => {
         }
       }
 
-      // Insert Sale Record
+      // Insert Sale Record with Tax Summary
       const saleRecord = {
-        invoice_no: invoiceNo,
+        invoice_no: invoiceNumber,
+        invoice_number: invoiceNumber,
         customer_name: body.customer_name,
         customer_phone: body.customer_phone || null,
+        customer_gstin: rawBody.customer_gstin || null,
+        customer_state_code: customerStateCode,
+        branch_state_code: branchStateCode,
+        is_interstate: gstSummary.is_interstate,
         is_khata: body.is_khata,
         items: body.items,
-        total: body.total,
+        total: gstSummary.grand_total,
+        total_taxable_amount: gstSummary.total_taxable_amount,
+        total_cgst: gstSummary.total_cgst,
+        total_sgst: gstSummary.total_sgst,
+        total_igst: gstSummary.total_igst,
+        total_tax: gstSummary.total_tax,
+        round_off: gstSummary.round_off,
+        grand_total: gstSummary.grand_total,
         cash_paid: body.cash_paid,
         khata_amount: khataAmount,
         date: dateStr,
@@ -215,9 +344,39 @@ serve(async (req: Request) => {
         return errorResponse('DATABASE_ERROR', saleInsertError.message, 500);
       }
 
+      // Insert Granular Sales Line Items if table exists
+      try {
+        const saleId = newSale?.id || crypto.randomUUID();
+        const lineItemRows = gstSummary.line_items.map((li) => ({
+          sale_id: saleId,
+          item_id: li.item_id || null,
+          item_name: li.name,
+          batch_id: li.batch || 'LOT-2026-DEFAULT',
+          quantity: li.qty,
+          unit_price: li.price,
+          hsn_code: li.hsn_code,
+          gst_rate: li.gst_rate,
+          is_gst_exempt: li.is_gst_exempt,
+          taxable_amount: li.taxable_amount,
+          cgst_rate: li.cgst_rate,
+          cgst_amount: li.cgst_amount,
+          sgst_rate: li.sgst_rate,
+          sgst_amount: li.sgst_amount,
+          igst_rate: li.igst_rate,
+          igst_amount: li.igst_amount,
+          total_tax: li.total_tax,
+          total_amount: li.total_amount,
+        }));
+
+        await client.from('sales_line_items').insert(lineItemRows);
+      } catch (lineItemErr) {
+        console.warn('Could not insert into sales_line_items table:', lineItemErr);
+      }
+
       return successResponse(
         {
           sale: newSale || saleRecord,
+          invoice: gstSummary,
           deductions: deductionResults,
           khataSynced: body.is_khata,
         },

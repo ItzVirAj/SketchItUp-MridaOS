@@ -19,6 +19,7 @@ import {
   Laptop,
   KeyRound,
   Clock,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -39,6 +40,7 @@ export const Sidebar: React.FC = () => {
 
   const criticalAlertCount = alerts.filter((a) => a.severity === 'critical').length;
   const isAdminOrOwner = userProfile?.role === 'admin' || userProfile?.role === 'owner';
+  const isAccountsOrAdmin = isAdminOrOwner || userProfile?.role === 'accounts_user';
 
   const navItems = [
     { id: 'command_center', label: 'Command Center', icon: LayoutDashboard, badge: criticalAlertCount > 0 ? `${criticalAlertCount}` : undefined },
@@ -49,6 +51,9 @@ export const Sidebar: React.FC = () => {
     { id: 'nursery_care', label: 'Nursery Operations', icon: Sprout },
     { id: 'compliance', label: 'Compliance & Licenses', icon: ShieldCheck },
     { id: 'intelligence', label: 'Seasonal & Analytics', icon: TrendingUp },
+    ...(isAccountsOrAdmin
+      ? [{ id: 'gst_reports', label: 'GST Returns & Tax', icon: FileSpreadsheet }]
+      : []),
     ...(isAdminOrOwner
       ? [{ id: 'users_directory', label: 'Users & Permissions', icon: Users }]
       : []),

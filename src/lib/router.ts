@@ -13,6 +13,7 @@ export const VIEW_ROUTES: Record<string, string> = {
   nursery_care: '/nursery',
   compliance: '/compliance',
   intelligence: '/intelligence',
+  gst_reports: '/gst-reports',
   users_directory: '/users',
   reset_password: '/reset-password',
   '404': '/404',
@@ -112,6 +113,18 @@ export const ROUTE_ALIASES: Record<string, string> = {
   '/market-intelligence': 'intelligence',
   'advisory': 'intelligence',
   '/advisory': 'intelligence',
+
+  // GST & Tax Reports aliases
+  'gst-reports': 'gst_reports',
+  '/gst-reports': 'gst_reports',
+  'gst_reports': 'gst_reports',
+  '/gst_reports': 'gst_reports',
+  'gst': 'gst_reports',
+  '/gst': 'gst_reports',
+  'tax': 'gst_reports',
+  '/tax': 'gst_reports',
+  'gstr': 'gst_reports',
+  '/gstr': 'gst_reports',
 
   // Users Directory aliases
   'users': 'users_directory',

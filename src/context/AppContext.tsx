@@ -47,6 +47,7 @@ export type ViewType =
   | 'nursery_care'
   | 'compliance'
   | 'intelligence'
+  | 'gst_reports'
   | 'users_directory'
   | 'dashboard';
 

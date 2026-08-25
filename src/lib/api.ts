@@ -167,16 +167,34 @@ export const salesApi = {
     return apiFetch<SaleRecord[]>(`sales${query ? `?${query}` : ''}`);
   },
   getById: (id: string) => apiFetch<SaleRecord>(`sales/${id}`),
+  getInvoice: (id: string) => apiFetch<{ sale: SaleRecord; invoice: any }>(`sales/${id}/invoice`),
   create: (sale: {
     customer_name: string;
     customer_phone?: string;
+    customer_gstin?: string;
+    customer_state_code?: string;
     is_khata: boolean;
-    items: { item_id: string; qty: number; price: number; batch?: string }[];
+    items: { item_id: string; qty: number; price: number; batch?: string; hsn_code?: string; gst_rate?: number; is_gst_exempt?: boolean }[];
     total: number;
     cash_paid: number;
     khata_amount: number;
     payment_mode?: string;
-  }) => apiFetch<SaleRecord>('sales', { method: 'POST', body: JSON.stringify(sale) }),
+  }) => apiFetch<{ sale: SaleRecord; invoice: any; deductions: any[] }>('sales', { method: 'POST', body: JSON.stringify(sale) }),
+};
+
+export const gstReportsApi = {
+  getSummary: (params?: { from?: string; to?: string; branch_id?: string }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return apiFetch<any>(`reports-gst/summary${query ? `?${query}` : ''}`);
+  },
+  getB2BInvoices: (params?: { from?: string; to?: string; branch_id?: string }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return apiFetch<any>(`reports-gst/b2b-invoices${query ? `?${query}` : ''}`);
+  },
+  getHsnSummary: (params?: { from?: string; to?: string; branch_id?: string }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return apiFetch<any>(`reports-gst/hsn-summary${query ? `?${query}` : ''}`);
+  },
 };
 
 export const purchaseOrdersApi = {
