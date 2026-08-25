@@ -80,7 +80,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
           </div>
           <div>
             <h2 className="text-base font-bold text-[#1A1A1A]">Reset Password</h2>
-            <p className="text-xs text-[#5E6D65]">15-minute single-use secure reset link</p>
+            <p className="text-xs text-[#5E6D65]">Secure single-use password reset link</p>
           </div>
         </div>
 
@@ -98,7 +98,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
               <div className="p-3 bg-[#F9FBFA] border border-[#CCD8D1] rounded-xl space-y-2">
                 <div className="flex items-center justify-between text-[11px] font-bold text-[#344054]">
                   <span className="flex items-center gap-1 text-[#079455]">
-                    <Clock className="w-3 h-3" /> One-Time Reset Link (15m):
+                    <ShieldCheck className="w-3.5 h-3.5" /> Direct Reset Link:
                   </span>
                   <button
                     onClick={() => handleCopy(successInfo.resetLink!)}

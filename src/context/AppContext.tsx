@@ -264,7 +264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (user.status === 'revoked') {
-        return { success: false, error: 'Your account access has been revoked by an administrator.' };
+        return { success: false, error: 'Account locked by admin. Please contact your store manager or system administrator.' };
       }
 
       // Verify password

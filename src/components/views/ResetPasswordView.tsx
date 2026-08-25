@@ -39,7 +39,7 @@ export const ResetPasswordView: React.FC = () => {
     setErrorMessage(null);
 
     if (!token.trim()) {
-      setErrorMessage('Please enter the 15-minute password reset token.');
+      setErrorMessage('Please enter the password reset token.');
       return;
     }
 
@@ -83,7 +83,7 @@ export const ResetPasswordView: React.FC = () => {
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">Set New Password</h1>
           <p className="text-xs sm:text-sm text-[#5E6D65] mt-1">
-            Single-use cryptographic reset with automatic 15-minute expiry.
+            Single-use cryptographic reset token.
           </p>
         </div>
 

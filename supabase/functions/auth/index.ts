@@ -236,6 +236,11 @@ serve(async (req: Request) => {
 
       // Step 4: Verify Account & Password
       const user = SEED_ACCOUNTS.find((a) => a.email.toLowerCase() === email);
+
+      if (user && (user.status === 'revoked' || (user as any).is_active === false)) {
+        return errorResponse('ACCOUNT_LOCKED', 'Account locked by admin. Please contact your store manager or system administrator.', 423);
+      }
+
       const currentStoredPassword = userPasswords.get(email) || user?.password;
       const isPasswordValid =
         user &&

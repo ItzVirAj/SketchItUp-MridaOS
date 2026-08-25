@@ -224,9 +224,25 @@ export const LoginPage: React.FC = () => {
 
             {/* Error Notification */}
             {displayError && (
-              <div className="mb-4 p-3.5 bg-[#FEF3F2] border border-[#FECDCA] rounded-2xl flex items-start gap-2.5 text-xs text-[#B42318] animate-in fade-in slide-in-from-top-1 duration-200">
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#D92D20]" />
-                <div className="flex-1 font-medium">{displayError}</div>
+              <div
+                id="login-error-alert"
+                className={`mb-4 p-3.5 rounded-2xl flex items-start gap-2.5 text-xs animate-in fade-in slide-in-from-top-1 duration-200 ${
+                  displayError.toLowerCase().includes('lock')
+                    ? 'bg-[#FEF3F2] border-2 border-[#FDA29B] text-[#912018]'
+                    : 'bg-[#FEF3F2] border border-[#FECDCA] text-[#B42318]'
+                }`}
+              >
+                {displayError.toLowerCase().includes('lock') ? (
+                  <Lock className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#D92D20]" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#D92D20]" />
+                )}
+                <div className="flex-1">
+                  {displayError.toLowerCase().includes('lock') && (
+                    <div className="font-bold text-[13px] text-[#B42318] mb-0.5">Account Locked</div>
+                  )}
+                  <div className="font-medium leading-relaxed">{displayError}</div>
+                </div>
               </div>
             )}
 

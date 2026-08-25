@@ -394,12 +394,12 @@ export const UsersDirectoryView: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-3.5 bg-[#FEF6EE] border border-[#F9DBAF] rounded-2xl flex items-start gap-2.5 text-xs text-[#B54708] mb-4">
-              <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div className="p-3.5 bg-[#EFF5F1] border border-[#C5D7CC] rounded-2xl flex items-start gap-2.5 text-xs text-[#067647] mb-4">
+              <KeyRound className="w-4 h-4 flex-shrink-0 mt-0.5 text-[#079455]" />
               <div>
-                <span className="font-bold">15-Minute Expiration & Single-Use:</span>
-                <p className="mt-0.5 text-[#93370D]">
-                  This token expires in 15 minutes and will be immediately invalidated once consumed. Copy and share securely with the employee.
+                <span className="font-bold">Secure Single-Use Reset Token:</span>
+                <p className="mt-0.5 text-[#2A523E]">
+                  This token is single-use and will be immediately invalidated once consumed. Copy and share securely with the employee.
                 </p>
               </div>
             </div>
