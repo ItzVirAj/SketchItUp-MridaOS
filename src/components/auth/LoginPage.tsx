@@ -16,11 +16,13 @@ import {
 } from 'lucide-react';
 
 const SEED_DEV_ACCOUNTS = [
-  { email: 'admin@mridaos.in', role: 'System Admin', name: 'Jethalal Gada', color: '#175CD3' },
   { email: 'owner@mridaos.in', role: 'Owner / Super Admin', name: 'Champaklal Gada', color: '#079455' },
+  { email: 'admin@mridaos.in', role: 'System Admin', name: 'Jethalal Gada', color: '#175CD3' },
   { email: 'counter@mridaos.in', role: 'Counter POS Staff', name: 'Natu Kaka', color: '#B54708' },
   { email: 'procurement@mridaos.in', role: 'Procurement Officer', name: 'Bagha Boy', color: '#0E7090' },
   { email: 'inventory@mridaos.in', role: 'Inventory Manager', name: 'Taarak Mehta', color: '#7A5E0B' },
+  { email: 'accounts@mridaos.in', role: 'Accounts Executive', name: 'Aatmaram Bhide', color: '#05603A' },
+  { email: 'nursery@mridaos.in', role: 'Nursery Caretaker', name: 'Popatlal Pandey', color: '#12B76A' },
 ];
 
 import { ForgotPasswordModal } from '../modals/ForgotPasswordModal';

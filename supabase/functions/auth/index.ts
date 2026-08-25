@@ -94,6 +94,24 @@ const SEED_ACCOUNTS = [
     phone: '+91 98765 00005',
     branchId: 'nashik-central',
   },
+  {
+    id: 'a0000000-0000-0000-0000-000000000006',
+    email: 'accounts@mridaos.in',
+    password: 'Admin@1234',
+    fullName: 'Aatmaram Bhide',
+    role: 'accounts_user',
+    phone: '+91 98765 00006',
+    branchId: 'nashik-central',
+  },
+  {
+    id: 'a0000000-0000-0000-0000-000000000007',
+    email: 'nursery@mridaos.in',
+    password: 'Admin@1234',
+    fullName: 'Popatlal Pandey',
+    role: 'nursery_care_staff',
+    phone: '+91 98765 00007',
+    branchId: 'nashik-central',
+  },
 ];
 
 // Persistent state stores
