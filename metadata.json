@@ -1,0 +1,6 @@
+{
+  "name": "MridaOS — Agri-Retail Operating System",
+  "description": "Modern operating dashboard & command center for fertilizer shops, plant nurseries, and agri-retail businesses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
