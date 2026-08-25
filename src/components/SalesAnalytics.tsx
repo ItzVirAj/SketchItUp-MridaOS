@@ -422,30 +422,30 @@ export const SalesAnalytics: React.FC = () => {
           </button>
         </div>
 
-        <div className="overflow-x-auto border border-[#CCD8D1] rounded-2xl">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="w-full overflow-x-auto border border-[#CCD8D1] dark:border-[#3D453D] rounded-2xl bg-white dark:bg-[#242924] shadow-xs">
+          <table className="min-w-[1100px] w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-[#F4EDDE] text-[#1A1A1A] font-bold border-b border-[#CCD8D1]">
-                <th className="py-2.5 px-3">Invoice No</th>
-                <th className="py-2.5 px-3">Date</th>
-                <th className="py-2.5 px-3">Customer</th>
-                <th className="py-2.5 px-3">Items / HSN</th>
-                <th className="py-2.5 px-3 text-right">Taxable (₹)</th>
-                <th className="py-2.5 px-3 text-right">GST (₹)</th>
-                <th className="py-2.5 px-3 text-right">Grand Total (₹)</th>
-                <th className="py-2.5 px-3 text-center">Payment</th>
-                <th className="py-2.5 px-3 text-right">Action</th>
+              <tr className="bg-[#F4EDDE] dark:bg-[#2D332D] text-[#1A1A1A] dark:text-[#E8F0E8] font-bold border-b border-[#CCD8D1] dark:border-[#3D453D]">
+                <th className="py-3 px-4 w-[14%] whitespace-nowrap">Invoice No</th>
+                <th className="py-3 px-4 w-[9%] whitespace-nowrap">Date</th>
+                <th className="py-3 px-4 w-[16%]">Customer</th>
+                <th className="py-3 px-4 w-[23%]">Items / HSN</th>
+                <th className="py-3 px-4 w-[10%] text-right whitespace-nowrap">Taxable (₹)</th>
+                <th className="py-3 px-4 w-[9%] text-right whitespace-nowrap">GST (₹)</th>
+                <th className="py-3 px-4 w-[11%] text-right whitespace-nowrap">Grand Total (₹)</th>
+                <th className="py-3 px-4 w-[8%] text-center whitespace-nowrap">Payment</th>
+                <th className="py-3 px-4 w-[8%] text-right whitespace-nowrap">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E0EAE4]">
+            <tbody className="divide-y divide-[#E0EAE4] dark:divide-[#3D453D]">
               {safeSales.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-[#7A8B82]">
+                  <td colSpan={9} className="py-12 text-center text-[#7A8B82] dark:text-[#8A9A8A]">
                     No sales recorded yet. Use "+ New Counter Sale / Bill" above to generate your first invoice.
                   </td>
                 </tr>
               ) : (
-                safeSales.slice(0, 10).map((sale, idx) => {
+                safeSales.slice(0, 15).map((sale, idx) => {
                   const invoiceNo = sale.invoiceNo || (sale as any).invoice_no || `INV/2026/00${101 + idx}`;
                   const customerName = sale.customerName || (sale as any).customer_name || 'Walk-in Farmer';
                   const isKhata = sale.isKhata ?? (sale as any).is_khata ?? false;
@@ -454,46 +454,48 @@ export const SalesAnalytics: React.FC = () => {
                   const gstTax = (sale as any).total_tax || (sale.total - taxable);
 
                   return (
-                    <tr key={sale.id || idx} className="hover:bg-[#F9FBFA]">
-                      <td className="py-2.5 px-3 font-mono font-bold text-[#079455]">
+                    <tr key={sale.id || idx} className="hover:bg-[#F9FBFA] dark:hover:bg-[#2D332D]/50 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-bold text-[#079455] dark:text-[#35C56E] whitespace-nowrap">
                         {invoiceNo}
                       </td>
-                      <td className="py-2.5 px-3 text-[#55635C]">{sale.date || 'Today'}</td>
-                      <td className="py-2.5 px-3">
-                        <div className="font-bold text-[#1A1A1A]">{customerName}</div>
+                      <td className="py-3.5 px-4 text-[#55635C] dark:text-[#B8C5B8] whitespace-nowrap">{sale.date || 'Today'}</td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-[#1A1A1A] dark:text-[#E8F0E8]">{customerName}</div>
                         {(sale as any).customer_gstin && (
-                          <div className="text-[10px] font-mono text-[#175CD3]">
+                          <div className="text-[10px] font-mono text-[#175CD3] dark:text-[#29B6F6]">
                             {(sale as any).customer_gstin}
                           </div>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-[#55635C] max-w-[200px] truncate">
-                        {(sale.items || []).map((i) => i.name).join(', ') || 'Agri Inputs'}
+                      <td className="py-3.5 px-4 text-[#55635C] dark:text-[#B8C5B8]">
+                        <div className="line-clamp-2 leading-relaxed">
+                          {(sale.items || []).map((i) => i.name).join(', ') || 'Agri Inputs'}
+                        </div>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-medium">
+                      <td className="py-3.5 px-4 text-right font-mono font-medium text-[#1A1A1A] dark:text-[#E8F0E8] whitespace-nowrap">
                         ₹{taxable.toLocaleString('en-IN')}.00
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#079455]">
+                      <td className="py-3.5 px-4 text-right font-mono font-medium text-[#079455] dark:text-[#35C56E] whitespace-nowrap">
                         ₹{gstTax.toLocaleString('en-IN')}.00
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1A1A1A]">
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-[#1A1A1A] dark:text-[#E8F0E8] whitespace-nowrap">
                         ₹{sale.total.toLocaleString('en-IN')}.00
                       </td>
-                      <td className="py-2.5 px-3 text-center">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <span
-                          className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                          className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                             isKhata
-                              ? 'bg-[#FEF0C7] text-[#B54708]'
-                              : 'bg-[#EFF8FF] text-[#175CD3]'
+                              ? 'bg-[#FEF0C7] text-[#B54708] dark:bg-[#3A2F0D] dark:text-[#FFC107]'
+                              : 'bg-[#EFF8FF] text-[#175CD3] dark:bg-[#0D2A3A] dark:text-[#29B6F6]'
                           }`}
                         >
                           {paymentMode}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-right">
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <button
                           onClick={() => setSelectedSaleForInvoice(sale)}
-                          className="px-2.5 py-1 rounded-xl bg-white border border-[#CCD8D1] hover:bg-[#F2F7F4] text-[#079455] font-bold text-[11px] flex items-center gap-1.5 ml-auto transition-colors cursor-pointer shadow-2xs"
+                          className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#2D332D] border border-[#CCD8D1] dark:border-[#3D453D] hover:bg-[#F2F7F4] dark:hover:bg-[#353D35] text-[#079455] dark:text-[#35C56E] font-bold text-[11px] flex items-center gap-1.5 ml-auto transition-colors cursor-pointer shadow-2xs"
                           title="Print / View Full GST Tax Invoice"
                         >
                           <Receipt className="w-3.5 h-3.5" />

@@ -52,15 +52,15 @@ export const DedicatedViews: React.FC = () => {
 
   if (activeView === 'sales_pos') {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] card-shadow">
+      <div className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#242924] p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] dark:border-[#3D453D] card-shadow">
           <div>
-            <h2 className="text-lg font-bold text-[#1A1A1A]">Counter POS & Invoice Stream</h2>
-            <p className="text-xs text-[#6E7B74]">Generate instant GST bills with FEFO batch mapping and customer Khata</p>
+            <h2 className="text-lg font-bold text-[#1A1A1A] dark:text-[#E8F0E8]">Counter POS & Invoice Stream</h2>
+            <p className="text-xs text-[#6E7B74] dark:text-[#8A9A8A]">Generate instant GST bills with FEFO batch mapping and customer Khata</p>
           </div>
           <button
             onClick={() => setActiveModal('new_sale')}
-            className="px-4 py-2 bg-[#079455] hover:bg-[#067A46] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto"
+            className="px-4 py-2 bg-[#079455] hover:bg-[#067A46] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>+ New Counter Sale / Bill</span>
@@ -73,15 +73,15 @@ export const DedicatedViews: React.FC = () => {
 
   if (activeView === 'inventory_fefo') {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] card-shadow">
+      <div className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#242924] p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] dark:border-[#3D453D] card-shadow">
           <div>
-            <h2 className="text-lg font-bold text-[#1A1A1A]">FEFO Batch Inventory Control</h2>
-            <p className="text-xs text-[#6E7B74]">Automated First-Expiry-First-Out stock rotation and batch tracking</p>
+            <h2 className="text-lg font-bold text-[#1A1A1A] dark:text-[#E8F0E8]">FEFO Batch Inventory Control</h2>
+            <p className="text-xs text-[#6E7B74] dark:text-[#8A9A8A]">Automated First-Expiry-First-Out stock rotation and batch tracking</p>
           </div>
           <button
             onClick={() => setActiveModal('stock_adjust')}
-            className="px-4 py-2 bg-[#1A1A1A] hover:bg-black text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto"
+            className="px-4 py-2 bg-[#1A1A1A] hover:bg-black dark:bg-[#2D332D] dark:hover:bg-[#353D35] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>+ Stock Adjustment / Variance</span>
@@ -94,15 +94,15 @@ export const DedicatedViews: React.FC = () => {
 
   if (activeView === 'khata_ledger') {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] card-shadow">
+      <div className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#242924] p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] dark:border-[#3D453D] card-shadow">
           <div>
-            <h2 className="text-lg font-bold text-[#1A1A1A]">Customer Khata & Farmer Credit Directory</h2>
-            <p className="text-xs text-[#6E7B74]">Track outstanding credit, automated reminder dispatch and settlement logging</p>
+            <h2 className="text-lg font-bold text-[#1A1A1A] dark:text-[#E8F0E8]">Customer Khata & Farmer Credit Directory</h2>
+            <p className="text-xs text-[#6E7B74] dark:text-[#8A9A8A]">Track outstanding credit, automated reminder dispatch and settlement logging</p>
           </div>
           <button
             onClick={() => setActiveModal('record_khata')}
-            className="px-4 py-2 bg-[#079455] hover:bg-[#067A46] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto"
+            className="px-4 py-2 bg-[#079455] hover:bg-[#067A46] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto cursor-pointer"
           >
             <IndianRupee className="w-4 h-4" />
             <span>Record Payment</span>
@@ -115,15 +115,15 @@ export const DedicatedViews: React.FC = () => {
 
   if (activeView === 'procurement') {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] card-shadow">
+      <div className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#242924] p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] dark:border-[#3D453D] card-shadow">
           <div>
-            <h2 className="text-lg font-bold text-[#1A1A1A]">Supplier Purchase Orders & Inward Log</h2>
-            <p className="text-xs text-[#6E7B74]">Direct rate contract issuance and Goods Receipt Notes (GRN)</p>
+            <h2 className="text-lg font-bold text-[#1A1A1A] dark:text-[#E8F0E8]">Supplier Purchase Orders & Inward Log</h2>
+            <p className="text-xs text-[#6E7B74] dark:text-[#8A9A8A]">Direct rate contract issuance and Goods Receipt Notes (GRN)</p>
           </div>
           <button
             onClick={() => setActiveModal('create_po')}
-            className="px-4 py-2 bg-[#1A1A1A] hover:bg-black text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto"
+            className="px-4 py-2 bg-[#1A1A1A] hover:bg-black dark:bg-[#2D332D] dark:hover:bg-[#353D35] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>+ Create Supplier PO</span>
@@ -136,15 +136,15 @@ export const DedicatedViews: React.FC = () => {
 
   if (activeView === 'nursery_care') {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] card-shadow">
+      <div className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#242924] p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] dark:border-[#3D453D] card-shadow">
           <div>
-            <h2 className="text-lg font-bold text-[#1A1A1A]">Greenhouse, Nursery & Polyhouse Control</h2>
-            <p className="text-xs text-[#6E7B74]">IoT microclimate telemetry, scheduled crop tasks and live visual monitoring</p>
+            <h2 className="text-lg font-bold text-[#1A1A1A] dark:text-[#E8F0E8]">Greenhouse, Nursery & Polyhouse Control</h2>
+            <p className="text-xs text-[#6E7B74] dark:text-[#8A9A8A]">IoT microclimate telemetry, scheduled crop tasks and live visual monitoring</p>
           </div>
           <button
             onClick={() => setActiveModal('plant_care')}
-            className="px-4 py-2 bg-[#079455] hover:bg-[#067A46] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto"
+            className="px-4 py-2 bg-[#079455] hover:bg-[#067A46] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-2xs self-start sm:self-auto cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>+ Add Care Schedule</span>
@@ -157,14 +157,14 @@ export const DedicatedViews: React.FC = () => {
 
   if (activeView === 'compliance') {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] card-shadow">
+      <div className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#242924] p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] dark:border-[#3D453D] card-shadow">
           <div>
-            <h2 className="text-lg font-bold text-[#1A1A1A]">Statutory Licenses & FCO Regulatory Center</h2>
-            <p className="text-xs text-[#6E7B74]">Fertilizer control order registers, insecticide licenses, audit compliance</p>
+            <h2 className="text-lg font-bold text-[#1A1A1A] dark:text-[#E8F0E8]">Statutory Licenses & FCO Regulatory Center</h2>
+            <p className="text-xs text-[#6E7B74] dark:text-[#8A9A8A]">Fertilizer control order registers, insecticide licenses, audit compliance</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-[#E0EAE4] text-[#079455] font-bold text-xs rounded-full">
+            <span className="px-3 py-1 bg-[#E0EAE4] dark:bg-[#1B3A1D] text-[#079455] dark:text-[#4CAF50] font-bold text-xs rounded-full">
               Audit Status: 100% Compliant
             </span>
           </div>
@@ -176,11 +176,11 @@ export const DedicatedViews: React.FC = () => {
 
   if (activeView === 'intelligence') {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] card-shadow">
+      <div className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#242924] p-4 sm:p-5 rounded-3xl border border-[#E2EAE5] dark:border-[#3D453D] card-shadow">
           <div>
-            <h2 className="text-lg font-bold text-[#1A1A1A]">Seasonal Demand & Margin Intelligence</h2>
-            <p className="text-xs text-[#6E7B74]">Kharif/Rabi sowing predictive models, agroclimatic advisories & profit matrix</p>
+            <h2 className="text-lg font-bold text-[#1A1A1A] dark:text-[#E8F0E8]">Seasonal Demand & Margin Intelligence</h2>
+            <p className="text-xs text-[#6E7B74] dark:text-[#8A9A8A]">Kharif/Rabi sowing predictive models, agroclimatic advisories & profit matrix</p>
           </div>
         </div>
         <SeasonalIntelligence />
